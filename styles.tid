@@ -21,6 +21,20 @@ tags: $:/tags/Stylesheet
 	display: none;
 }
 
+/* Edited list item: the editor host is its first child; hide only the item's own content (and its
+   marker), keep its nested sub-items and the editor visible */
+.rr-ol-editing-own {
+	visibility: hidden;
+}
+
+.rr-ol-editing-own > .rr-ol-editor-host,
+.rr-ol-editing-own > ul,
+.rr-ol-editing-own > ol,
+.rr-ol-editing-own > dl,
+.rr-ol-editing-own > blockquote {
+	visibility: visible;
+}
+
 .rr-ol-tmark {
 	display: inline-block;
 	margin-left: 0.4em;
@@ -54,7 +68,7 @@ tags: $:/tags/Stylesheet
 	margin-bottom: 0.2em;
 }
 
-.rr-ol-conflict {
+.rr-ol-notice {
 	margin-bottom: 0.3em;
 	padding: 0.3em 0.6em;
 	border-left: 3px solid <<colour alert-highlight>>;

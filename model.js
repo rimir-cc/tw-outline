@@ -218,3 +218,23 @@ exports.buildModel = function(wiki, text, title) {
 	walkBlocks(tree, {parent: -1, headings: []});
 	return {text: text, units: units, roots: roots};
 };
+
+/*
+Id of the unit that starts at `start`, preferring `kind` (a list and its first item share a start);
+-1 if none. accept(id) optionally restricts the candidates (e.g. to units with DOM nodes).
+*/
+exports.findUnit = function(model, start, kind, accept) {
+	var match = -1;
+	for(var i = 0; i < model.units.length; i++) {
+		var u = model.units[i];
+		if(u.start === start && (!accept || accept(u.id))) {
+			if(!kind || u.kind === kind) {
+				return u.id;
+			}
+			if(match === -1) {
+				match = u.id;
+			}
+		}
+	}
+	return match;
+};

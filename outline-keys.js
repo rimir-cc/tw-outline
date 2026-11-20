@@ -16,7 +16,13 @@ be selected.
 "use strict";
 
 var formats = require("$:/plugins/rimir/outline/formats.js"),
-	isInside = require("$:/plugins/rimir/outline/outline-editor.js").isInside;
+	findUnit = require("$:/plugins/rimir/outline/model.js").findUnit,
+	dom = require("$:/plugins/rimir/outline/dom-utils.js"),
+	setClass = dom.setClass,
+	focus = dom.focus,
+	isInside = dom.isInside,
+	isEditable = dom.isEditable,
+	scrollIntoView = dom.scrollIntoView;
 
 var SELECTION_PREFIX = "$:/temp/rimir/outline/selection/",
 	READ_ONLY = "$:/status/IsReadOnly",
@@ -88,14 +94,11 @@ methods.resolveSelection = function() {
 	if(!state || !this.units.length) {
 		return -1;
 	}
-	var start = parseInt(state.fields.start, 10),
-		kind = state.fields.kind,
-		matches = this.units.filter(function(entry) {
-			return entry.unit.start === start && self.isSelectable(entry.unit.id);
-		}),
-		sameKind = matches.filter(function(entry) { return entry.unit.kind === kind; });
-	if(sameKind.length || matches.length) {
-		return (sameKind[0] || matches[0]).unit.id;
+	var id = findUnit(this.model, parseInt(state.fields.start, 10), state.fields.kind, function(i) {
+		return self.isSelectable(i);
+	});
+	if(id !== -1) {
+		return id;
 	}
 	var index = parseInt(state.fields.index, 10);
 	if(isNaN(index)) {
@@ -271,42 +274,6 @@ methods.handleClick = function(event) {
 		node = node.parentNode;
 	}
 };
-
-/* ---------- helpers ---------- */
-
-function setClass(node, cls, on) {
-	var list = (node.className || "").split(" ").filter(function(c) { return c && c !== cls; });
-	if(on) {
-		list.push(cls);
-	}
-	if(list.length) {
-		node.className = list.join(" ");
-	} else if(node.removeAttribute) {
-		node.removeAttribute("class");
-	}
-}
-
-function isEditable(node) {
-	for(; node && node.nodeType === 1; node = node.parentNode) {
-		var tag = (node.tagName || "").toLowerCase();
-		if(tag === "input" || tag === "textarea" || tag === "select" || node.isContentEditable) {
-			return true;
-		}
-	}
-	return false;
-}
-
-function focus(node) {
-	if(node.focus) {
-		node.focus({preventScroll: true});
-	}
-}
-
-function scrollIntoView(node) {
-	if(node && node.scrollIntoView) {
-		node.scrollIntoView({block: "nearest"});
-	}
-}
 
 exports.install = function(proto) {
 	$tw.utils.each(methods, function(fn, name) {

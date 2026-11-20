@@ -76,6 +76,21 @@ describe("outline editor", function() {
 		return r;
 	}
 
+	// A second <$outline> view of T in the same wiki
+	function secondView(r) {
+		var parser = r.wiki.parseText("text/vnd.tiddlywiki",
+				"<$outline tiddler=\"T\"><$transclude $tiddler=\"T\" $mode=\"block\"/></$outline>",
+				{parseAsInline: false}),
+			root = r.wiki.makeWidget(parser, {document: $tw.fakeDocument}),
+			container = $tw.fakeDocument.createElement("div");
+		root.render(container, null);
+		return {root: root, widget: findWidget(root, "outline")};
+	}
+
+	function notes(r) {
+		return elements(r.widget.editor.host).filter(function(el) { return hasClass(el, "rr-ol-notice"); });
+	}
+
 	function hasClass(el, cls) {
 		return (el.attributes["class"] || "").split(" ").indexOf(cls) !== -1;
 	}
@@ -120,11 +135,13 @@ describe("outline editor", function() {
 		expect(ed.isNew).toBe(false);
 		expect(ed.origSource).toBe("* a");
 		expect(ed.origStart).toBe(0);
-		expect(ed.host.tag).toBe("li");
+		// Items: the host is the first child of the li; only the li's own content is hidden, not its sub-items
+		expect(ed.host.tag).toBe("div");
 		expect(hasClass(ed.host, "rr-ol-editor-host")).toBe(true);
-		var sib = siblings(li);
-		expect(sib.indexOf(ed.host)).toBe(sib.indexOf(li) - 1);
-		expect(hasClass(li, "rr-ol-editing")).toBe(true);
+		expect(ed.host.parentNode).toBe(li);
+		expect(li.children[0]).toBe(ed.host);
+		expect(hasClass(li, "rr-ol-editing-own")).toBe(true);
+		expect(hasClass(li, "rr-ol-editing")).toBe(false);
 		expect(r.buffer()).toBe("* a");
 		// The editor template rendered an edit widget for the buffer
 		var textareas = elements(ed.host).filter(function(el) { return el.tag === "textarea"; });
@@ -132,10 +149,14 @@ describe("outline editor", function() {
 		expect(textareas[0].textContent).toBe("* a");
 	});
 
-	it("uses a div host for non-items", function() {
+	it("uses a div host before non-items and hides them", function() {
 		var r = render("! H\n\npara");
-		r.widget.startEdit(r.idOf("para"));
+		var id = r.idOf("para"),
+			p = r.widget.units[id].domNodes[0];
+		r.widget.startEdit(id);
 		expect(r.widget.editor.host.tag).toBe("div");
+		expect(siblings(p).indexOf(r.widget.editor.host)).toBe(siblings(p).indexOf(p) - 1);
+		expect(hasClass(p, "rr-ol-editing")).toBe(true);
 	});
 
 	it("save writes only that range once and cleans up", function() {
@@ -151,7 +172,7 @@ describe("outline editor", function() {
 		expect(r.widget.editor).toBe(null);
 		r.refresh();
 		expect(elements(r.widget.domNode).filter(function(el) { return hasClass(el, "rr-ol-editor-host"); }).length).toBe(0);
-		expect(elements(r.widget.domNode).filter(function(el) { return hasClass(el, "rr-ol-editing"); }).length).toBe(0);
+		expect(elements(r.widget.domNode).filter(function(el) { return hasClass(el, "rr-ol-editing") || hasClass(el, "rr-ol-editing-own"); }).length).toBe(0);
 		// Saved unit is selected
 		expect(r.widget.units[r.widget.selectedId].unit.start).toBe(10);
 	});
@@ -175,8 +196,8 @@ describe("outline editor", function() {
 		expect(r.wiki.getTiddler("T")).toBe(before);
 		expect(r.wiki.tiddlerExists(BUF + "T")).toBe(false);
 		expect(r.widget.editor).toBe(null);
-		expect(hasClass(li, "rr-ol-editing")).toBe(false);
-		expect(siblings(li).filter(function(el) { return hasClass(el, "rr-ol-editor-host"); }).length).toBe(0);
+		expect(hasClass(li, "rr-ol-editing-own")).toBe(false);
+		expect(elements(r.widget.domNode).filter(function(el) { return hasClass(el, "rr-ol-editor-host"); }).length).toBe(0);
 	});
 
 	it("new unit after an item goes after its subtree, blank new unit writes nothing", function() {
@@ -264,9 +285,9 @@ describe("outline editor", function() {
 		expect(r.text()).toBe("* bb\n* bb");
 		expect(r.widget.editor).not.toBe(null);
 		expect(r.buffer()).toBe("* typed");
-		var notes = elements(r.widget.editor.host).filter(function(el) { return hasClass(el, "rr-ol-conflict"); });
-		expect(notes.length).toBe(1);
-		expect(notes[0].textContent).toBe("The tiddler changed underneath. Copy your text.");
+		var found = elements(r.widget.editor.host).filter(function(el) { return hasClass(el, "rr-ol-conflict"); });
+		expect(found.length).toBe(1);
+		expect(found[0].textContent).toBe("The tiddler changed underneath. Copy your text.");
 	});
 
 	it("re-attaches the editor next to the relocated unit after a re-render and keeps the buffer", function() {
@@ -279,12 +300,12 @@ describe("outline editor", function() {
 			li = r.widget.units[r.idOf("* bb")].domNodes[0];
 		expect(ed).not.toBe(null);
 		expect(ed.id).toBe(r.idOf("* bb"));
-		var sib = siblings(li);
-		expect(sib.indexOf(ed.host)).toBe(sib.indexOf(li) - 1);
-		expect(hasClass(li, "rr-ol-editing")).toBe(true);
+		expect(ed.host.parentNode).toBe(li);
+		expect(li.children[0]).toBe(ed.host);
+		expect(hasClass(li, "rr-ol-editing-own")).toBe(true);
 		expect(r.buffer()).toBe("* typed");
 		expect(elements(r.widget.domNode).filter(function(el) { return hasClass(el, "rr-ol-editor-host"); }).length).toBe(1);
-		expect(elements(r.widget.domNode).filter(function(el) { return hasClass(el, "rr-ol-editing"); }).length).toBe(1);
+		expect(elements(r.widget.domNode).filter(function(el) { return hasClass(el, "rr-ol-editing-own"); }).length).toBe(1);
 	});
 
 	it("read-only and units without DOM nodes cannot be edited", function() {
@@ -358,7 +379,7 @@ describe("outline editor", function() {
 		expect(events[0].navigateTo).toBe("X");
 	});
 
-	it("destroying the widget removes the editor but keeps the buffer", function() {
+	it("destroying the widget (toggle off, close) removes the editor and discards its buffer", function() {
 		var r = render("* a");
 		r.widget.startEdit(r.idOf("* a"));
 		r.type("* typed");
@@ -366,6 +387,94 @@ describe("outline editor", function() {
 		r.widget.destroy({removeDOMNodes: true});
 		expect(r.widget.editor).toBe(null);
 		expect(siblings(host).indexOf(host)).toBe(-1);
-		expect(r.buffer()).toBe("* typed");
+		expect(r.wiki.tiddlerExists(BUF + "T")).toBe(false);
+	});
+
+	it("two views: the second view cannot take over or touch the owner's buffer", function() {
+		var r = render("* a\n* b"),
+			b = secondView(r);
+		r.widget.startEdit(r.idOf("* a"));
+		r.type("* A typed");
+		var focused = 0;
+		spyOn(r.widget, "focusEditor").and.callFake(function() { focused++; });
+		expect(b.widget.startEdit(1 + 1)).toBe(false);
+		expect(b.widget.editor).toBe(null);
+		expect(focused).toBe(1);
+		expect(r.buffer()).toBe("* A typed");
+		// Save/cancel/destroy in the other view leave the owner's buffer alone
+		expect(b.widget.cancelEdit()).toBe(false);
+		expect(b.widget.saveEdit()).toBe(false);
+		b.widget.destroy({removeDOMNodes: true});
+		expect(r.buffer()).toBe("* A typed");
+		r.widget.saveEdit();
+		expect(r.text()).toBe("* A typed\n* b");
+		// Released: the other view may edit now
+		var c = secondView(r);
+		expect(c.widget.startEdit(c.widget.units.length - 1)).toBe(true);
+	});
+
+	it("relocation needs the same own source: edited * b, outside change to * bb is a conflict", function() {
+		var r = render("* a\n* b");
+		r.widget.startEdit(r.idOf("* b"));
+		r.type("* B");
+		r.wiki.addTiddler({title: "T", text: "* a\n* bb"});
+		expect(r.widget.saveEdit()).toBe(false);
+		expect(r.text()).toBe("* a\n* bb");
+		expect(elements(r.widget.editor.host).filter(function(el) { return hasClass(el, "rr-ol-conflict"); }).length).toBe(1);
+		expect(r.buffer()).toBe("* B");
+	});
+
+	it("relocation ignores the source occurring inside another unit (* a vs ** a1)", function() {
+		var r = render("* a\n** a1\n* c");
+		r.widget.startEdit(r.idOf("* a"));
+		r.type("* A");
+		r.wiki.addTiddler({title: "T", text: "* x\n* a\n** a1\n* c"});
+		expect(r.widget.saveEdit()).toBe(true);
+		expect(r.text()).toBe("* x\n* A\n** a1\n* c");
+	});
+
+	it("blank save deletes a unit without children", function() {
+		var r = render("* a\n* b\n* c");
+		r.widget.startEdit(r.idOf("* b"));
+		r.type("  ");
+		expect(r.widget.saveEdit()).toBe(true);
+		expect(r.text()).toBe("* a\n* c");
+		var p = render("p1\n\np2\n\np3");
+		p.widget.startEdit(p.idOf("p2"));
+		p.type("");
+		p.widget.saveEdit();
+		expect(p.text()).toBe("p1\n\np3");
+	});
+
+	it("blank save of a unit with children writes nothing and keeps the editor", function() {
+		var r = render("* a\n** a1\n* b");
+		r.widget.startEdit(r.idOf("* a"));
+		r.type("");
+		expect(r.widget.saveEdit()).toBe(false);
+		expect(r.text()).toBe("* a\n** a1\n* b");
+		expect(r.widget.editor).not.toBe(null);
+		var n = notes(r);
+		expect(n.length).toBe(1);
+		expect(n[0].textContent).toBe("Remove or move its children first.");
+	});
+
+	it("blank new unit closes without a conflict even after an ambiguous outside change", function() {
+		var r = render("* a\n* b");
+		r.widget.startEdit(r.idOf("* a"), {isNew: true});
+		r.wiki.addTiddler({title: "T", text: "* a\n* a"});
+		expect(r.widget.saveEdit()).toBe(true);
+		expect(r.widget.editor).toBe(null);
+		expect(r.text()).toBe("* a\n* a");
+	});
+
+	it("save re-checks read-only", function() {
+		var r = render("* a");
+		r.widget.startEdit(r.idOf("* a"));
+		r.type("* A");
+		r.wiki.addTiddler({title: "$:/status/IsReadOnly", text: "yes"});
+		expect(r.widget.saveEdit()).toBe(false);
+		expect(r.text()).toBe("* a");
+		expect(r.widget.editor).not.toBe(null);
+		expect(r.buffer()).toBe("* A");
 	});
 });

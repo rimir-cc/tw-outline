@@ -112,4 +112,35 @@ describe("outline edit", function() {
 		expect(multi).toBeDefined();
 		expect(fmt.isMultiline(m2, multi.id)).toBe(true);
 	});
+
+	describe("remove", function() {
+		function removed(text, source) {
+			var m = build(text), r = fmt.remove(text, m, idOf(m, source));
+			return r && r.text;
+		}
+
+		it("removes an item and one line break", function() {
+			expect(removed("* a\n* b\n* c", "* b")).toBe("* a\n* c");
+			expect(removed("* a\n* b", "* b")).toBe("* a");
+			expect(removed("* a\n* b\n\npara", "* b")).toBe("* a\n\npara");
+			expect(removed("* a\r\n* b\r\n* c", "* b")).toBe("* a\r\n* c");
+		});
+
+		it("keeps one blank-line separator between remaining blocks", function() {
+			expect(removed("p1\n\np2\n\np3", "p2")).toBe("p1\n\np3");
+			expect(removed("p1\n\np2", "p2")).toBe("p1");
+			expect(removed("p1\n\np2", "p1")).toBe("p2");
+			expect(removed("p1\r\n\r\np2\r\n\r\np3", "p2")).toBe("p1\r\n\r\np3");
+		});
+
+		it("refuses units with children", function() {
+			var text = "* a\n** a1", m = build(text);
+			expect(fmt.remove(text, m, idOf(m, "* a"))).toBe(null);
+		});
+
+		it("selects the place of the removed unit", function() {
+			var text = "* a\n* b\n* c", m = build(text), r = fmt.remove(text, m, idOf(m, "* b"));
+			expect(r.select).toBe(4);
+		});
+	});
 });

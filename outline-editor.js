@@ -12,30 +12,53 @@ In-place editor of the $outline widget. install(proto) adds these methods to the
   handleEditorKeydown(event)   - keys while editing (events from inside the host)
   openTarget(title)            - open a transcluded tiddler in outline mode
 
-this.editor = {host, widget, id, isNew, kind, unitKind, hostTag, origSource, origStart, origText, multiline, conflict, caret, hidden}
-  host       - <li> (items) or <div>, class rr-ol-editor-host. Not part of the body's widget tree, so a
-               re-render of the body does not destroy it.
+this.editor = {host, widget, id, isNew, kind, unitKind, placement, origSource, origStart, origText, multiline,
+               notice, caret, focused, hidden}
+  host       - <div> (or <li> for a new item), class rr-ol-editor-host. Not part of the body's widget tree, so
+               a re-render of the body does not destroy it.
+  placement  - "inside": first child of the edited item's element (its sub-items stay visible);
+               "before": before the edited unit's first DOM node; "after": after the anchor of a new unit
   widget     - the editor widget tree ($:/plugins/rimir/outline/ui/editor), parent: the outline widget
-  id         - unit id in the current mapping (the edited unit, or the anchor of a new unit)
-  origSource - source of the unit (anchor) when the edit started; used to relocate it after outside changes
+  id         - unit id in the current mapping (the edited unit, or the anchor of a new unit), -1: not found
+  origSource - own source of the unit (anchor) when the edit started; relocates it after outside changes
   origText   - tiddler text when the edit started
 
-Typing only changes the buffer $:/temp/rimir/outline/edit/<title>. The tiddler is written once on save.
+Buffer: $:/temp/rimir/outline/edit/<title>, one per tiddler. Typing only changes the buffer; the tiddler is
+written once on save. When the same tiddler is shown twice, the view that opened the editor owns the buffer
+(module registry `owners`): other views cannot open a second editor and never touch the buffer.
 
 \*/
 "use strict";
 
 var formats = require("$:/plugins/rimir/outline/formats.js"),
 	utils = require("$:/plugins/rimir/outline/text-utils.js"),
-	buildModel = require("$:/plugins/rimir/outline/model.js").buildModel;
+	model = require("$:/plugins/rimir/outline/model.js"),
+	dom = require("$:/plugins/rimir/outline/dom-utils.js");
 
 var BUFFER_PREFIX = "$:/temp/rimir/outline/edit/",
 	STATE_PREFIX = "$:/state/rimir/outline/on/",
 	EDITOR_TIDDLER = "$:/plugins/rimir/outline/ui/editor",
 	HOST_CLASS = "rr-ol-editor-host",
+	// Edited unit hidden (blocks) / only its own content hidden (items: sub-items stay visible)
 	EDITING_CLASS = "rr-ol-editing",
-	CONFLICT_CLASS = "rr-ol-conflict",
-	CONFLICT_TEXT = "The tiddler changed underneath. Copy your text.";
+	EDITING_OWN_CLASS = "rr-ol-editing-own",
+	NOTICES = {
+		conflict: {cls: "rr-ol-notice rr-ol-conflict", text: "The tiddler changed underneath. Copy your text."},
+		children: {cls: "rr-ol-notice rr-ol-children", text: "Remove or move its children first."},
+		readonly: {cls: "rr-ol-notice rr-ol-readonly", text: "The wiki is read-only."}
+	};
+
+// Per wiki: buffer title -> outline widget that owns the open editor for it
+var registries = new WeakMap();
+
+function ownersOf(wiki) {
+	var owners = registries.get(wiki);
+	if(!owners) {
+		owners = Object.create(null);
+		registries.set(wiki, owners);
+	}
+	return owners;
+}
 
 var methods = {};
 
@@ -43,15 +66,32 @@ methods.bufferTitle = function() {
 	return BUFFER_PREFIX + this.tiddlerTitle;
 };
 
+methods.ownsBuffer = function() {
+	return ownersOf(this.wiki)[this.bufferTitle()] === this;
+};
+
+// The other view that has a live editor for this tiddler, or null
+methods.otherOwner = function() {
+	var owner = ownersOf(this.wiki)[this.bufferTitle()];
+	if(!owner || owner === this || !owner.editor || owner.domNode.isConnected === false) {
+		return null;
+	}
+	return owner;
+};
+
 /*
-Open the editor. Existing unit: the host goes before the unit's first DOM node and the unit is hidden.
-New unit (opts.isNew): the host goes after the last DOM node of anchor unit `id`; nothing is written
-until it is saved. Returns false when nothing was opened.
+Open the editor. Nothing is written until it is saved. Returns false when nothing was opened (also when
+another view of the same tiddler has an open editor: that one gets the focus instead).
 */
 methods.startEdit = function(id, opts) {
 	opts = opts || {};
 	if(this.editor) {
 		this.focusEditor();
+		return false;
+	}
+	var owner = this.otherOwner();
+	if(owner) {
+		owner.focusEditor();
 		return false;
 	}
 	if(this.isReadOnly() || !this.isSelectable(id) || !this.getAdapter()) {
@@ -64,7 +104,7 @@ methods.startEdit = function(id, opts) {
 	}
 	var unit = this.units[id].unit,
 		isNew = !!opts.isNew,
-		source = isNew ? "" : this.getAdapter().editSource(this.model.text, this.model, id);
+		adapter = this.getAdapter();
 	this.editor = {
 		host: null,
 		widget: null,
@@ -72,39 +112,47 @@ methods.startEdit = function(id, opts) {
 		isNew: isNew,
 		kind: isNew ? (unit.kind === "item" ? "item" : "block") : unit.kind,
 		unitKind: unit.kind,
-		hostTag: unit.kind === "item" ? "li" : "div",
+		placement: isNew ? "after" : (unit.kind === "item" ? "inside" : "before"),
 		origSource: this.model.text.substring(unit.start, unit.end),
 		origStart: unit.start,
 		origText: this.model.text,
-		multiline: !isNew && this.getAdapter().isMultiline(this.model, id),
-		caret: null
+		multiline: !isNew && adapter.isMultiline(this.model, id),
+		notice: null,
+		caret: null,
+		focused: false,
+		hidden: []
 	};
+	ownersOf(this.wiki)[this.bufferTitle()] = this;
 	this.wiki.addTiddler(new $tw.Tiddler({
 		title: this.bufferTitle(),
-		text: source,
+		text: isNew ? "" : adapter.editSource(this.model.text, this.model, id),
 		type: "text/vnd.tiddlywiki"
 	}));
-	this.placeEditor();
+	this.placeEditor(true);
 	return true;
 };
 
-// Create host + editor widget at the position of this.editor.id (or at the end of the container)
-methods.placeEditor = function() {
+// Create host + editor widget at the place of this.editor.id (or at the end of the container).
+// focus: whether the new editor takes the focus when it renders
+methods.placeEditor = function(focus) {
 	var ed = this.editor,
-		entry = ed.id === -1 ? null : this.units[ed.id],
-		nodes = entry ? entry.domNodes : [],
-		host = this.document.createElement(ed.hostTag);
+		nodes = ed.id === -1 ? [] : this.units[ed.id].domNodes,
+		host = this.document.createElement(ed.placement === "after" && ed.unitKind === "item" ? "li" : "div"),
+		self = this;
 	host.className = HOST_CLASS;
 	if(!nodes.length) {
 		this.domNode.appendChild(host);
-	} else if(ed.isNew) {
+	} else if(ed.placement === "after") {
 		var last = nodes[nodes.length - 1];
-		last.parentNode.insertBefore(host, nextSiblingOf(last));
+		last.parentNode.insertBefore(host, dom.nextSiblingOf(last));
+	} else if(ed.placement === "inside") {
+		nodes[0].insertBefore(host, nodes[0].firstChild || null);
 	} else {
 		nodes[0].parentNode.insertBefore(host, nodes[0]);
 	}
-	var self = this;
 	host.addEventListener("keydown", function(event) { self.handleEditorKeydown(event); }, false);
+	host.addEventListener("focusin", function() { if(self.editor) { self.editor.focused = true; } }, false);
+	host.addEventListener("focusout", function() { if(self.editor) { self.editor.focused = false; } }, false);
 	ed.host = host;
 	this.hideEdited();
 	// The host is in the document now: the FramedEngine needs that to create its iframe
@@ -113,44 +161,69 @@ methods.placeEditor = function() {
 		document: this.document,
 		variables: {
 			"outline-edit-tiddler": this.bufferTitle(),
-			"len": String(this.wiki.getTiddlerText(this.bufferTitle(), "").length)
+			"len": String(this.wiki.getTiddlerText(this.bufferTitle(), "").length),
+			"outline-edit-focus": focus ? "yes" : "no"
 		}
 	});
 	ed.widget.render(host, null);
-	if(ed.conflict) {
-		this.showConflict();
+	this.trackEngineFocus();
+	if(ed.notice) {
+		this.showNotice(ed.notice);
 	}
 };
 
-// Hide the edited unit's DOM nodes (not for new units)
+// The FramedEngine's textarea lives in an iframe: its focus events do not reach the host
+methods.trackEngineFocus = function() {
+	var ed = this.editor,
+		engine = this.editorEngine(),
+		self = this;
+	if(!engine || !engine.domNode || !engine.domNode.addEventListener) {
+		return;
+	}
+	engine.domNode.addEventListener("focus", function() { if(self.editor === ed) { ed.focused = true; } }, false);
+	engine.domNode.addEventListener("blur", function() { if(self.editor === ed) { ed.focused = false; } }, false);
+	var active = this.document.activeElement;
+	ed.focused = !!active && (active === engine.domNode || active === engine.iframeNode);
+};
+
 methods.hideEdited = function() {
 	var ed = this.editor;
 	this.unhideEdited();
-	ed.hidden = ed.isNew || ed.id === -1 ? [] : this.units[ed.id].domNodes.slice();
+	if(ed.placement === "after" || ed.id === -1) {
+		return;
+	}
+	var cls = ed.placement === "inside" ? EDITING_OWN_CLASS : EDITING_CLASS;
+	ed.hidden = this.units[ed.id].domNodes.slice();
 	$tw.utils.each(ed.hidden, function(node) {
-		setClass(node, EDITING_CLASS, true);
+		dom.setClass(node, cls, true);
 	});
 };
 
 methods.unhideEdited = function() {
 	var ed = this.editor;
 	$tw.utils.each(ed && ed.hidden || [], function(node) {
-		setClass(node, EDITING_CLASS, false);
+		dom.setClass(node, EDITING_CLASS, false);
+		dom.setClass(node, EDITING_OWN_CLASS, false);
 	});
 	if(ed) {
 		ed.hidden = [];
 	}
 };
 
-// Remove host and editor widget; the buffer stays
-methods.closeEditor = function() {
-	var ed = this.editor;
-	if(!ed) {
+// Remove host and editor widget; release the buffer, and delete it when `discard`
+methods.closeEditor = function(discard) {
+	if(!this.editor) {
 		return;
 	}
 	this.unhideEdited();
 	this.removeHost();
 	this.editor = null;
+	if(this.ownsBuffer()) {
+		delete ownersOf(this.wiki)[this.bufferTitle()];
+		if(discard) {
+			this.wiki.deleteTiddler(this.bufferTitle());
+		}
+	}
 };
 
 methods.removeHost = function() {
@@ -169,16 +242,16 @@ methods.cancelEdit = function() {
 	if(!this.editor) {
 		return false;
 	}
-	this.closeEditor();
-	this.wiki.deleteTiddler(this.bufferTitle());
-	focus(this.domNode);
+	this.closeEditor(true);
+	dom.focus(this.domNode);
 	return true;
 };
 
 /*
 Save: splice the buffer into the unit's range (or insert the new unit) and write the tiddler once.
-If the text changed since the edit started, the unit is located again by its original source. If that
-fails, the editor stays open with a conflict notice and the buffer is kept. Returns true when saved.
+Blank text: a new unit writes nothing; an existing unit without children is deleted, one with children is
+refused with a notice. If the unit cannot be located safely after an outside change, the editor stays
+open with a conflict notice and the buffer is kept. Returns true when the editor was closed.
 */
 methods.saveEdit = function(opts) {
 	opts = opts || {};
@@ -186,42 +259,48 @@ methods.saveEdit = function(opts) {
 	if(!ed) {
 		return false;
 	}
+	var newSource = this.wiki.getTiddlerText(this.bufferTitle(), ""),
+		blank = !/\S/.test(newSource);
+	if(ed.isNew && blank) {
+		// Nothing typed into a new unit: nothing to write, a continue chain ends here
+		this.closeEditor(true);
+		dom.focus(this.domNode);
+		return true;
+	}
+	if(this.isReadOnly()) {
+		this.showNotice("readonly");
+		return false;
+	}
 	var tiddler = this.wiki.getTiddler(this.tiddlerTitle),
 		current = tiddler ? (tiddler.fields.text || "") : "",
 		adapter = this.getAdapter(),
-		newSource = this.wiki.getTiddlerText(this.bufferTitle(), "");
-	if(!tiddler || !adapter) {
-		this.showConflict();
-		return false;
-	}
-	var target = this.locateEditUnit(current);
+		target = tiddler && adapter ? this.locateEditUnit(current) : null;
 	if(!target) {
-		this.showConflict();
+		this.showNotice("conflict");
 		return false;
 	}
-	newSource = newSource.replace(/\r?\n/g, utils.eol(current));
 	var result;
 	if(ed.isNew) {
-		result = adapter.insertNew(current, target.model, target.id, newSource);
+		result = adapter.insertNew(current, target.model, target.id, newSource.replace(/\r?\n/g, utils.eol(current)));
+	} else if(blank) {
+		result = adapter.remove(current, target.model, target.id);
+		if(!result) {
+			this.showNotice("children");
+			return false;
+		}
 	} else {
-		result = adapter.replace(current, target.model, target.id, newSource);
+		result = adapter.replace(current, target.model, target.id, newSource.replace(/\r?\n/g, utils.eol(current)));
 	}
 	var kind = ed.kind,
-		index = ed.isNew ? target.id + 1 : target.id,
-		blankNew = ed.isNew && !result;
-	this.closeEditor();
-	this.wiki.deleteTiddler(this.bufferTitle());
-	focus(this.domNode);
-	if(blankNew) {
-		// Nothing typed into a new unit: nothing to write, the chain ends here
-		return true;
-	}
+		index = ed.isNew ? target.id + 1 : target.id;
+	this.closeEditor(true);
+	dom.focus(this.domNode);
 	var written = result.text !== current;
 	if(written) {
 		this.wiki.addTiddler(new $tw.Tiddler(tiddler, {text: result.text}, this.wiki.getModificationFields()));
 	}
-	this.saveSelection(result.select, index, kind);
-	if(opts["continue"]) {
+	this.saveSelection(result.select, index, blank ? "" : kind);
+	if(opts["continue"] && !blank) {
 		this.pendingContinue = {start: result.select, kind: kind};
 		if(!written) {
 			this.runPendingContinue();
@@ -234,18 +313,20 @@ methods.saveEdit = function(opts) {
 
 /*
 {model, id} of the edited unit (or anchor) in `text`, or null when it cannot be located safely.
-Unchanged text: the original unit. Otherwise: the unit whose start is the only occurrence of the
-original source.
+Unchanged text: the original unit. Otherwise: the one unit of the same kind whose own source equals the
+original own source; none or several -> null.
 */
 methods.locateEditUnit = function(text) {
 	var ed = this.editor,
-		pos = text === ed.origText ? ed.origStart : utils.relocate(text, ed.origSource);
-	if(pos === -1) {
-		return null;
+		m = this.model && this.model.text === text ? this.model : model.buildModel(this.wiki, text, this.tiddlerTitle);
+	if(text === ed.origText) {
+		var same = model.findUnit(m, ed.origStart, ed.unitKind);
+		return same === -1 ? null : {model: m, id: same};
 	}
-	var model = this.model && this.model.text === text ? this.model : buildModel(this.wiki, text, this.tiddlerTitle),
-		id = findUnit(model, pos, ed.unitKind);
-	return id === -1 ? null : {model: model, id: id};
+	var found = m.units.filter(function(u) {
+		return u.kind === ed.unitKind && text.substring(u.start, u.end) === ed.origSource;
+	});
+	return found.length === 1 ? {model: m, id: found[0].id} : null;
 };
 
 // After a re-render: open the new unit requested by saveEdit({continue: true})
@@ -255,16 +336,16 @@ methods.runPendingContinue = function() {
 	if(!pending || this.editor) {
 		return;
 	}
-	var id = findUnit(this.model, pending.start, pending.kind);
+	var id = model.findUnit(this.model, pending.start, pending.kind);
 	if(id !== -1) {
 		this.startEdit(id, {isNew: true});
 	}
 };
 
 /*
-After the body was (re-)mapped: put the host next to the relocated unit again. When the host is
-still in place it is left alone (moving an iframe reloads it). Otherwise the editor widget is created
-again from the buffer, so typed text is kept, and gets the focus and caret back.
+After the body was (re-)mapped: put the host next to the relocated unit again. When the host is still in
+place it is left alone (moving an iframe reloads it). Otherwise the editor widget is created again from the
+buffer, so typed text is kept. It gets the focus (and caret) back only if it had the focus before.
 */
 methods.reattachEditor = function() {
 	var ed = this.editor;
@@ -278,36 +359,39 @@ methods.reattachEditor = function() {
 		this.hideEdited();
 		return;
 	}
-	if(ed.id === -1 && ed.host && isInside(ed.host, this.domNode)) {
+	if(ed.id === -1 && dom.isInside(ed.host, this.domNode)) {
 		// Unit not found (the save will report the conflict): leave the editor where it is
 		this.unhideEdited();
 		return;
 	}
-	var engine = this.editorEngine();
+	var hadFocus = ed.focused,
+		engine = this.editorEngine();
 	ed.caret = null;
 	if(engine && engine.domNode && typeof engine.domNode.selectionStart === "number") {
 		ed.caret = [engine.domNode.selectionStart, engine.domNode.selectionEnd];
 	}
 	this.unhideEdited();
 	this.removeHost();
-	this.placeEditor();
-	this.focusEditor();
+	this.placeEditor(hadFocus);
+	if(hadFocus) {
+		this.focusEditor();
+	}
 };
 
 // True when the host is attached inside the container at the place the unit asks for
 methods.hostInPlace = function() {
 	var ed = this.editor;
-	if(!ed.host || !isInside(ed.host, this.domNode)) {
-		return false;
-	}
-	if(ed.id === -1) {
+	if(ed.id === -1 || !dom.isInside(ed.host, this.domNode)) {
 		return false;
 	}
 	var nodes = this.units[ed.id].domNodes;
-	if(ed.isNew) {
-		return nextSiblingOf(nodes[nodes.length - 1]) === ed.host;
+	if(ed.placement === "after") {
+		return dom.nextSiblingOf(nodes[nodes.length - 1]) === ed.host;
 	}
-	return nextSiblingOf(ed.host) === nodes[0];
+	if(ed.placement === "inside") {
+		return ed.host.parentNode === nodes[0] && nodes[0].firstChild === ed.host;
+	}
+	return dom.nextSiblingOf(ed.host) === nodes[0];
 };
 
 methods.editorEngine = function() {
@@ -335,24 +419,27 @@ methods.focusEditor = function() {
 		if(caret && engine.domNode && engine.domNode.setSelectionRange) {
 			engine.domNode.setSelectionRange(Math.min(caret[0], len), Math.min(caret[1], len));
 		}
+		this.editor.focused = true;
 	}
 };
 
-methods.showConflict = function() {
-	var ed = this.editor;
-	ed.conflict = true;
+// Show notice `name` (NOTICES) at the top of the host; replaces a previous notice
+methods.showNotice = function(name) {
+	var ed = this.editor,
+		info = NOTICES[name];
+	ed.notice = name;
 	if(!ed.host) {
 		return;
 	}
-	var children = ed.host.childNodes || [];
-	for(var i = 0; i < children.length; i++) {
-		if(children[i].className === CONFLICT_CLASS) {
-			return;
+	var children = Array.prototype.slice.call(ed.host.childNodes || []);
+	$tw.utils.each(children, function(child) {
+		if(child.nodeType === 1 && (child.className || "").split(" ").indexOf("rr-ol-notice") !== -1) {
+			ed.host.removeChild(child);
 		}
-	}
+	});
 	var note = this.document.createElement("div");
-	note.className = CONFLICT_CLASS;
-	note.appendChild(this.document.createTextNode(CONFLICT_TEXT));
+	note.className = info.cls;
+	note.appendChild(this.document.createTextNode(info.text));
 	ed.host.insertBefore(note, ed.host.firstChild || null);
 };
 
@@ -421,70 +508,6 @@ methods.getAdapter = function() {
 	var tiddler = this.wiki.getTiddler(this.tiddlerTitle);
 	return formats.getFormat(tiddler ? tiddler.fields.type : "");
 };
-
-/* ---------- helpers ---------- */
-
-// Unit id with this start, same kind preferred; -1 if none
-function findUnit(model, start, kind) {
-	var match = -1;
-	for(var i = 0; i < model.units.length; i++) {
-		var u = model.units[i];
-		if(u.start === start) {
-			if(!kind || u.kind === kind) {
-				return i;
-			}
-			if(match === -1) {
-				match = i;
-			}
-		}
-	}
-	return match;
-}
-
-// nextSibling for the browser DOM and TW's fake DOM (which has none)
-function nextSiblingOf(node) {
-	if(node.nextSibling !== undefined) {
-		return node.nextSibling;
-	}
-	var siblings = node.parentNode ? node.parentNode.childNodes : [],
-		i = siblings.indexOf(node);
-	return i === -1 ? null : (siblings[i + 1] || null);
-}
-
-// True when `node` is attached below `ancestor` (fake DOM: removeChild keeps parentNode, so check membership)
-function isInside(node, ancestor) {
-	if(ancestor.contains) {
-		return ancestor.contains(node);
-	}
-	while(node && node !== ancestor) {
-		var parent = node.parentNode;
-		if(!parent || parent.childNodes.indexOf(node) === -1) {
-			return false;
-		}
-		node = parent;
-	}
-	return node === ancestor;
-}
-
-function setClass(node, cls, on) {
-	var list = (node.className || "").split(" ").filter(function(c) { return c && c !== cls; });
-	if(on) {
-		list.push(cls);
-	}
-	if(list.length) {
-		node.className = list.join(" ");
-	} else if(node.removeAttribute) {
-		node.removeAttribute("class");
-	}
-}
-
-function focus(node) {
-	if(node && node.focus) {
-		node.focus({preventScroll: true});
-	}
-}
-
-exports.isInside = isInside;
 
 exports.install = function(proto) {
 	$tw.utils.each(methods, function(fn, name) {

@@ -3,7 +3,7 @@ title: $:/plugins/rimir/outline/format-wikitext.js
 type: application/javascript
 module-type: outline-format
 
-Wikitext adapter: indent and promote. Functions take (text, model, id) and return null or {text, select}.
+Wikitext adapter: indent, promote, move, replace, insertNew, remove. Functions take (text, model, id) and return null or {text, select}.
 
 \*/
 "use strict";
@@ -117,6 +117,40 @@ exports.insertNew = function(text, model, id, newSource) {
 		if(/\S/.test(rest) && !/^\r?\n[ \t]*\r?\n/.test(rest)) { insert += nl; }
 	}
 	return {text: utils.splice(text, pos, pos, insert), select: select};
+};
+
+/*
+Delete a unit without children (blank save in the editor); null for units with children.
+Items that have siblings lose their own range plus one adjacent line break. Other units (and an only
+item) also lose the blank lines after them, so exactly one separator stays between the neighbours;
+the last unit takes the line breaks before it instead.
+*/
+exports.remove = function(text, model, id) {
+	var u = model.units[id];
+	if(!u || u.children.length) { return null; }
+	var a = u.start, b = u.end,
+		after = text.substring(b),
+		parent = u.parent === -1 ? null : model.units[u.parent],
+		m;
+	if(u.kind === "item" && parent && parent.children.length > 1) {
+		m = /^\r?\n/.exec(after);
+		if(m && /\S/.test(after.substring(m[0].length))) {
+			b += m[0].length;
+		} else {
+			m = /\r?\n$/.exec(text.substring(0, a));
+			a -= m ? m[0].length : 0;
+		}
+	} else {
+		m = /^(?:[ \t]*\r?\n)*/.exec(after);
+		if(/\S/.test(after.substring(m[0].length))) {
+			b += m[0].length;
+		} else {
+			m = /(?:\r?\n[ \t]*)*$/.exec(text.substring(0, a));
+			a -= m[0].length;
+		}
+	}
+	var result = utils.splice(text, a, b, "");
+	return {text: result, select: Math.min(a, result.length)};
 };
 
 // What the editor shows

@@ -97,10 +97,10 @@ OutlineWidget.prototype.refresh = function(changedTiddlers) {
 	return refreshed;
 };
 
-// Remove the editor (it is not part of the children); the buffer stays
+// Remove the editor (it is not part of the children). Closing the view discards the edit (owned buffer).
 OutlineWidget.prototype.destroy = function(options) {
 	if(this.editor) {
-		this.closeEditor();
+		this.closeEditor(true);
 	}
 	Widget.prototype.destroy.call(this, options);
 };
