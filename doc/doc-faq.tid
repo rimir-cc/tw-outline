@@ -1,0 +1,66 @@
+created: 20261120120000000
+modified: 20261120120000000
+rdt.hub-category: tools
+rdt.hub-category-name: Tools
+rdt.hub-order: 6
+rdt.plugin-key: outline
+rdt.plugin-name: outline
+rdt.plugin-subtitle: Select, edit, move and indent blocks of a tiddler in place
+rdt.order: 5
+rdt.section: FAQ
+title: $:/plugins/rimir/outline/doc/faq
+type: text/vnd.tiddlywiki
+
+<$transclude $tiddler="$:/plugins/rimir/doc-template/templates/page">
+<$fill $name="body">
+
+!! Which tiddlers can be outlined?
+
+Wikitext tiddlers (`text/vnd.tiddlywiki`) that are not drafts, system tiddlers, `code-body` or `hide-body` tiddlers. v1 is wikitext only; Markdown comes later through a second format adapter.
+
+!! Where does the button show?
+
+In the view toolbar, per tiddler. State is `$:/state/rimir/outline/on/<title>`.
+
+!! Can I move a unit into another list or section?
+
+Not yet. Moves stay inside the parent: at the first or last child, Alt-Up/Down do nothing. Moving across parents is a planned follow-up.
+
+!! Are widgets and macros editable inside?
+
+No. `<$list>`, `<$reveal>`, macro and procedure calls are single units: select, move or edit their source as a whole. Only plain HTML containers are opened.
+
+!! Why can't I select a block?
+
+Units that render nothing (for example a procedure call with empty output) have no DOM node and cannot be selected.
+
+!! What happens when I save an empty unit?
+
+A unit without children is deleted. A unit with children is not: the save is refused with a notice. A new unit (from Enter) that stays empty writes nothing.
+
+!! What if the tiddler changes while I edit?
+
+Your text is kept. On save the unit is looked up again by its original source: if it occurs exactly once, the save goes there; otherwise the editor stays open with a notice.
+
+!! Two views of the same tiddler?
+
+Only one view can edit at a time.
+
+!! What happens to an unsaved edit?
+
+Closing the tiddler or toggling outline mode off discards it.
+
+!! Do `AI:` lines of llm-inline fire?
+
+No. Outline writes bypass `th-saving-tiddler`, which llm-inline listens to. `AI:` lines typed in outline mode do not fire; they do after a normal editor save.
+
+!! Do editor plugins work?
+
+Yes, the editor is TW's own edit widget. AutoComplete handles Enter, Escape, Tab and the arrows first; outline keys act only if the event was not consumed.
+
+!! Does Tab leave the page?
+
+No, while a unit is selected Tab is used for indent.
+
+</$fill>
+</$transclude>

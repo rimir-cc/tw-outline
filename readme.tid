@@ -1,0 +1,31 @@
+title: $:/plugins/rimir/outline/readme
+
+! Outline
+
+Work on an ordinary tiddler like on a Streams outline: select a block, edit it in place, move it with Alt-Up/Down, indent it with Tab, and see the result rendered at once. The tiddler stays one tiddler; no helper tiddlers are created.
+
+!! Features
+
+* ''Toggle per tiddler'' — an //outline// button in the view toolbar. Off means the normal view, with no extra handlers.
+* ''Same rendering'' — the tiddler renders exactly as usual. Outline mode only adds data attributes, a selection frame and key handling.
+* ''Units'' — list items, lists, headings (with their sections), paragraphs, code blocks, tables, opened HTML containers, transclusion lines, and widgets or macro calls (one opaque unit each).
+* ''Selection'' — click, Up/Down in document order, Escape clears.
+* ''Move'' — Alt-Up/Alt-Down swap a unit with its sibling, carrying its subtree. Moves stay inside the parent.
+* ''Indent'' — Tab/Shift-Tab demote/promote list items (one marker character) and headings (one `!`) with their subtrees.
+* ''In-place editor'' — Shift-Enter opens TW's own edit widget at the unit (AutoComplete and other editor plugins work). Ctrl-Enter saves, Enter saves and starts a new unit, Escape discards.
+* ''Transclusions'' — a small marker on `{{…}}` lines; Enter opens the target in outline mode.
+* ''Safe writes'' — every write is a splice of a known range; if the text changed underneath, the edit is relocated or refused, never guessed.
+
+!! Prerequisites
+
+* TiddlyWiki 5.4.0 or later (JS modules: server restart or reload needed after install)
+* Optional: `rimir/theme` (`rr-` styles in settings), `rimir/doc-template` (branded docs)
+
+!! Quick Start
+
+# Install the plugin and restart the server (the widget and key modules load only at startup).
+# Open a wikitext tiddler and press //outline// in its view toolbar.
+# Click a block. Move with Up/Down, press Alt-Down to move it below its sibling, Tab to indent it.
+# Press Shift-Enter, change the text, press Ctrl-Enter to save.
+
+Wikitext only; Markdown tiddlers are not supported yet.

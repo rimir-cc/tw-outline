@@ -1,0 +1,39 @@
+created: 20261120120000000
+modified: 20261120120000000
+rdt.hub-category: tools
+rdt.hub-category-name: Tools
+rdt.hub-order: 6
+rdt.plugin-key: outline
+rdt.plugin-name: outline
+rdt.plugin-subtitle: Select, edit, move and indent blocks of a tiddler in place
+rdt.order: 3
+rdt.section: Dev Workflow
+title: $:/plugins/rimir/outline/doc/dev-workflow
+type: text/vnd.tiddlywiki
+
+<$transclude $tiddler="$:/plugins/rimir/doc-template/templates/page">
+<$fill $name="body">
+
+!! Tests
+
+```
+bin/tw test outline        # Jasmine, all outline specs
+bin/tw test                # the whole suite
+```
+
+Specs live in `test/`: `test-parser-pins.js` (parser positions), `test-model.js`, `test-text-utils.js`, `test-indent.js`, `test-move.js`, `test-edit.js`, `test-editor.js`, `test-keys.js`, `test-widget.js`, with shared fixtures in `fixtures.js`.
+
+!! Invariants
+
+Every operation test uses one shared assertion: only the unit's range (and the swapped sibling's) changes, a no-op returns the identical string, and an operation followed by its inverse restores the text exactly.
+
+!! Adding a format
+
+A format adapter registers in `formats.js` and provides `indent`, `promote`, `move`, `replace`, `insertNew`, `remove`, `editSource` and `isMultiline` for one content type. Markdown is planned as the second adapter.
+
+!! Restart
+
+All JS modules (`module-type: widget` and library modules) need a server restart or reload. Templates and settings tiddlers do not.
+
+</$fill>
+</$transclude>

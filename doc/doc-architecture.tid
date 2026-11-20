@@ -1,0 +1,47 @@
+created: 20261120120000000
+modified: 20261120120000000
+rdt.hub-category: tools
+rdt.hub-category-name: Tools
+rdt.hub-order: 6
+rdt.plugin-key: outline
+rdt.plugin-name: outline
+rdt.plugin-subtitle: Select, edit, move and indent blocks of a tiddler in place
+rdt.order: 2
+rdt.section: Architecture
+title: $:/plugins/rimir/outline/doc/architecture
+type: text/vnd.tiddlywiki
+
+<$transclude $tiddler="$:/plugins/rimir/doc-template/templates/page">
+<$fill $name="body">
+
+!! Approach
+
+The tiddler is rendered unchanged. A JS widget, `$outline`, wraps the normal body transclusion, walks the rendered widget tree and stamps `data-ol-*` attributes on the DOM node of each unit. One delegated `keydown` and `click` handler lives on the widget's container. Operations are splices of known text ranges. Wrapper elements inside the body are avoided on purpose: they would change the HTML and break CSS such as `ul > li`.
+
+!! Parts
+
+|!File |!Role |
+|`model.js` |Collects units from the widget tree: start, end, kind, level, parent, siblings |
+|`text-utils.js`, `dom-utils.js` |Pure text helpers; DOM lookup shared by widget and editor |
+|`formats.js` |Registry of format adapters |
+|`format-wikitext.js` |Wikitext adapter: indent, promote, move, replace, insertNew, remove, editSource, isMultiline |
+|`outline-widget.js` |The `$outline` widget: unit-to-DOM mapping, stamps, selection, writes |
+|`outline-keys.js` |Key dispatch through `$:/config/shortcuts/outline-*` |
+|`outline-editor.js` |In-place editor: temp tiddler, placeholder, save, continue, conflict handling |
+|`ui/*` |Toolbar button and icon, body template and its filter, editor template, transclusion marker |
+|`styles.tid` |Selection frame, marker |
+
+!! Routing
+
+`ui/toolbar-button` toggles `$:/state/rimir/outline/on/<title>` (`yes`/`no`). `ui/body-filter` (a `$:/tags/ViewTemplateBodyFilter` entry) routes eligible tiddlers with state `yes` to `ui/body`, which renders `<$outline>` around the usual block transclusion.
+
+!! Editor
+
+The editor is a real TW edit widget bound to a temp tiddler (`$:/temp/rimir/outline/...`), placed where the unit was. It lives outside the rendered body's widget tree, so a re-render does not destroy it. Typing changes only the temp tiddler; the real tiddler changes once per save.
+
+!! Writes
+
+A single `wiki.addTiddler` of the old tiddler plus the new `text` and modification fields. Before writing, the text must equal the text the positions were computed from, otherwise nothing is written and the view re-renders.
+
+</$fill>
+</$transclude>

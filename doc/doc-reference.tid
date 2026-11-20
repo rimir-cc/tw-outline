@@ -1,0 +1,62 @@
+created: 20261120120000000
+modified: 20261120120000000
+rdt.hub-category: tools
+rdt.hub-category-name: Tools
+rdt.hub-order: 6
+rdt.plugin-key: outline
+rdt.plugin-name: outline
+rdt.plugin-subtitle: Select, edit, move and indent blocks of a tiddler in place
+rdt.order: 6
+rdt.section: Reference
+title: $:/plugins/rimir/outline/doc/reference
+type: text/vnd.tiddlywiki
+
+<$transclude $tiddler="$:/plugins/rimir/doc-template/templates/page">
+<$fill $name="body">
+
+!! Keys
+
+|!Shortcut tiddler |!Default |!Action |
+|`outline-up` / `outline-down` |Up / Down |Select previous / next unit |
+|`outline-move-up` / `outline-move-down` |alt-Up / alt-Down |Swap with previous / next sibling |
+|`outline-indent` / `outline-promote` |Tab / shift-Tab |Demote / promote by one level |
+|`outline-edit` |shift-Enter |Edit in place |
+|`outline-open` |Enter |Open the transclusion target in outline mode |
+|`outline-clear` |Escape |Clear selection |
+|`outline-save` |ctrl-Enter |Save the edit |
+|`outline-continue` |Enter |Save and open a new unit (single-line units) |
+|`outline-newline` |shift-Enter |Newline in the editor |
+|`outline-cancel` |Escape |Discard the edit |
+
+All are `$:/config/shortcuts/<name>`; descriptions are in `$:/config/ShortcutInfo/<name>`.
+
+In multi-line units (code blocks, tables, widgets, `"""` items) Enter is a plain newline and only Ctrl-Enter saves.
+
+!! Indent and promote
+
+* Lists: a list item and its subtree lines get one more of the item's last marker character (`#b` becomes `##b`, `*b` `**b`, `#*` `#**`). No previous sibling: no-op. Promote removes one marker character; depth 1 is a no-op.
+* Headings: one `!` more on the heading and every heading in its section; no-op if one would pass 6. Promote removes one; level 1 is a no-op.
+* Other units: Tab and Shift-Tab do nothing.
+
+!! Move
+
+Swap the unit's whole subtree with the adjacent sibling's whole subtree, blank-line separators preserved. First/last child: no-op.
+
+* List item: siblings are items of the same list at the same depth.
+* Heading: siblings are headings of the same level in the same parent.
+* Other blocks: siblings are blocks in the same section (or HTML container, or root) before any sub-heading.
+
+!! New unit (Enter)
+
+* List item: same marker, after the item's whole subtree.
+* Heading: paragraph directly under the heading line.
+* Paragraph: paragraph after it.
+
+!! State and config
+
+|!Tiddler |!Purpose |
+|`$:/state/rimir/outline/on/<title>` |Outline mode on (`yes`) / off |
+|`$:/temp/rimir/outline/...` |Editor buffer and selection while active |
+
+</$fill>
+</$transclude>

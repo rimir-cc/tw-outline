@@ -1,0 +1,44 @@
+created: 20261120120000000
+modified: 20261120120000000
+rdt.hub-category: tools
+rdt.hub-category-name: Tools
+rdt.hub-order: 6
+rdt.plugin-key: outline
+rdt.plugin-name: outline
+rdt.plugin-subtitle: Select, edit, move and indent blocks of a tiddler in place
+rdt.order: 7
+rdt.section: TW Internals
+title: $:/plugins/rimir/outline/doc/tw-internals
+type: text/vnd.tiddlywiki
+
+<$transclude $tiddler="$:/plugins/rimir/doc-template/templates/page">
+<$fill $name="body">
+
+!! Parser positions
+
+The plugin relies on the wikitext parser's source offsets. `WikiParser.parseBlock` sets `start`, `end` and `rule` on every top-level block node. The list rule sets them on each list item: from the marker to the end of the item's own line, nested child lines excluded. Every widget keeps its parse node as `widget.parseTreeNode`, so a widget tree walk recovers the ranges.
+
+Units are recomputed after every render and are valid only for the text they were computed from.
+
+!! `{{X}}` is a "tiddler" node
+
+A block transclusion `{{X}}` parses to a node of type `tiddler`, not `transclude`; the walker maps it to the transclusion unit. Widgets rendered from a transcluded tiddler carry offsets into //that// tiddler's text, so descent stops at a transclude to another tiddler.
+
+!! Widget mapping rule
+
+A unit's DOM node is found by matching the parse node's `start` and tag; `end` is the tie-breaker when several widgets share a start (for example a list and its first item).
+
+!! Pin tests
+
+`test/test-parser-pins.js` pins the offsets for list items, headings, paragraphs, code blocks, tables, transclusion lines, containers, widgets and pragma-prefixed text. A TW update that changes them fails the suite loudly.
+
+!! Why writes bypass `th-saving-tiddler`
+
+A write is `wiki.addTiddler` of the old tiddler with new `text` plus `getModificationFields()`. It is not an editor save, and a single splice per action must not trigger editor-save hooks. Consequence: listeners on `th-saving-tiddler`, such as llm-inline's `AI:` lines, do not fire.
+
+!! Editor and AutoComplete
+
+AutoComplete listens on `document` in the capture phase, so its handler runs before the outline key handler, which checks `event.defaultPrevented`.
+
+</$fill>
+</$transclude>

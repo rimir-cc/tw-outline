@@ -1,0 +1,46 @@
+created: 20261120120000000
+modified: 20261120120000000
+rdt.hub-category: tools
+rdt.hub-category-name: Tools
+rdt.hub-order: 6
+rdt.plugin-key: outline
+rdt.plugin-name: outline
+rdt.plugin-subtitle: Select, edit, move and indent blocks of a tiddler in place
+rdt.order: 1
+rdt.section: Overview
+title: $:/plugins/rimir/outline/doc/overview
+type: text/vnd.tiddlywiki
+
+<$transclude $tiddler="$:/plugins/rimir/doc-template/templates/page">
+<$fill $name="body">
+
+!! What it does
+
+Outline mode brings the Streams workflow to a normal tiddler. Switch it on for a tiddler with the //outline// button in the view toolbar. The tiddler renders as before; every block that comes from its own text becomes selectable. Select a block, edit it in place, move it, indent it. Each action rewrites the right part of that one tiddler's text.
+
+!! How you use it
+
+# Press //outline// in the view toolbar (the button is shown for wikitext tiddlers only, not for drafts, system tiddlers, `code-body` or `hide-body` tiddlers).
+# Click a block or press Up/Down. A blue frame marks the selected unit.
+# Alt-Up/Alt-Down move it, Tab/Shift-Tab indent or promote it. Its subtree goes along.
+# Shift-Enter opens the editor in place. Ctrl-Enter saves, Enter saves and opens a new unit, Escape discards.
+# On a transclusion line, Enter opens the target tiddler, already in outline mode.
+
+!! Units
+
+* List items (`*`, `#`, `;`, `:`, `>`) - the item's own lines; nested items are its subtree.
+* Lists as a whole.
+* Headings, with their section (up to the next heading of the same or a higher level) as subtree.
+* Paragraphs, code blocks, tables.
+* Plain HTML containers (`<div>`, `<section>`, ...) are opened: their inner blocks are units, and the container is one too.
+* Transclusion lines (`{{...}}`, `<$transclude/>`).
+* Widgets (`<$list>`, `<$reveal>`, ...) and macro or procedure calls: opaque, one unit each.
+
+Pragmas (`\define`, `\procedure`, `\import`, ...) are never units. A unit that renders nothing cannot be selected.
+
+!! Read-only wikis
+
+With `$:/status/IsReadOnly` = yes, only navigation (selection, transclusion jump) works.
+
+</$fill>
+</$transclude>

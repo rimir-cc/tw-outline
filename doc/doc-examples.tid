@@ -1,0 +1,40 @@
+created: 20261120120000000
+modified: 20261120120000000
+rdt.hub-category: tools
+rdt.hub-category-name: Tools
+rdt.hub-order: 6
+rdt.plugin-key: outline
+rdt.plugin-name: outline
+rdt.plugin-subtitle: Select, edit, move and indent blocks of a tiddler in place
+rdt.order: 4
+rdt.section: Examples
+title: $:/plugins/rimir/outline/doc/examples
+type: text/vnd.tiddlywiki
+
+<$transclude $tiddler="$:/plugins/rimir/doc-template/templates/page">
+<$fill $name="body">
+
+!! Moving and indenting
+
+Take this note:
+
+```
+! Shopping
+* milk
+* bread
+** rye
+* eggs
+```
+
+Select //bread//, press Alt-Down: `bread` and `rye` swap places with `eggs`. Press Tab on //eggs//: it becomes `** eggs` under `bread`. Press Shift-Tab to undo.
+
+!! Save and new
+
+Select a list item, Shift-Enter, type, press Enter: the item is saved and a new item with the same marker opens after the item's whole subtree. Leave it empty and press Ctrl-Enter or Escape: nothing is written.
+
+!! Transclusions
+
+A line `{{Other note}}` shows a small marker. Select it and press Enter: //Other note// opens in the story with outline mode on.
+
+</$fill>
+</$transclude>
