@@ -28,9 +28,13 @@ A block transclusion `{{X}}` parses to a node of type `tiddler`, not `transclude
 
 A unit's DOM node is found by matching the parse node's `start` and tag; `end` is the tie-breaker when several widgets share a start (for example a list and its first item).
 
+!! Pragmas and typed blocks
+
+A pragma such as `\define` parses to a `set` node that wraps the rest of the tree; the walker steps through it, and the pragma itself is never a unit. For `$$$` typed blocks the parser starts the node at the line after the `$$$` header, so the widget match uses that line as the unit's anchor instead of the unit start (see `outline-widget.js`).
+
 !! Pin tests
 
-`test/test-parser-pins.js` pins the offsets for list items, headings, paragraphs, code blocks, tables, transclusion lines, containers, widgets and pragma-prefixed text. A TW update that changes them fails the suite loudly.
+`test/test-parser-pins.js` pins the offsets for list items, a heading and a paragraph, a block transclusion (`{{X}}` parses to a `tiddler` node), pragma wrapping (`\define` yields a `set` node that wraps the following blocks), a code block, a table and a block-mode HTML container. Widgets are not pinned. A TW update that changes them fails the suite loudly.
 
 !! Why writes bypass `th-saving-tiddler`
 
