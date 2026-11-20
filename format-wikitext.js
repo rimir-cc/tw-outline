@@ -80,7 +80,7 @@ exports.promote = function(text, model, id) {
 Swap the unit's whole subtree with the adjacent sibling of the same class (heading vs non-heading).
 Items and headings keep the separators as they are. Other blocks that touch (single line break) get a blank line
 between them and before the content after the pair, because after the swap a paragraph would otherwise absorb the
-block after it.
+block after it. Non-whitespace between the blocks (a comment) is kept and set apart by blank lines.
 */
 exports.move = function(text, model, id, dir) {
 	var u = model.units[id];
@@ -98,11 +98,15 @@ exports.move = function(text, model, id, dir) {
 		rest = text.substring(b.subtreeEnd);
 	if(u.kind !== "item" && u.kind !== "heading") {
 		var nl = utils.eol(text),
-			gap = /^\s*/.exec(rest)[0];
-		if(!BLANK_LINE.test(sep)) {
+			gap = /^(?:[ \t]*\r?\n)*/.exec(rest)[0];
+		if(/\S/.test(sep)) {
+			// Keep anything between the blocks (e.g. a comment), set apart by blank lines on both sides
+			sep = nl + nl + sep.trim() + nl + nl;
+		} else if(!BLANK_LINE.test(sep)) {
 			sep = nl + nl;
 		}
-		if(gap.length < rest.length && !BLANK_LINE.test(gap)) {
+		// Only whole line breaks are normalised, so the next line keeps its indentation
+		if(/\S/.test(rest) && !BLANK_LINE.test(gap)) {
 			rest = nl + nl + rest.substring(gap.length);
 		}
 	}

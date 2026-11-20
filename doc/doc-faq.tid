@@ -54,6 +54,12 @@ Escape or toggling outline mode off discards it. If you changed the text and the
 
 When a list, code block or table is followed directly (single line break) by a paragraph, swapping them as they are would merge the paragraph with its new neighbour. Such blocks get a blank line between them. Items and headings keep their line breaks.
 
+A comment (or other text that is not a unit) between the two blocks is kept and set apart by blank lines too.
+
+!! Why does Alt-Up/Down sometimes do nothing?
+
+A move only swaps a unit with its neighbour inside the same parent, and only with a neighbour of the same class (heading with heading of the same level, item with item of the same level, other blocks with other blocks). Before writing, outline re-parses the result; if the swap would change the units (for example a heading section whose last paragraph would merge with the next block), the move is refused and the text stays unchanged. Add a blank line between the blocks by hand and try again.
+
 !! Why do Tab and Alt-Up/Down do nothing while I edit?
 
 Structural keys are blocked while the view has an open editor: a move could rewrite the unit you are editing. Save or cancel first.

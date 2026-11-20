@@ -75,6 +75,11 @@ describe("outline move", function() {
 		expect(run("para\n\n* a\n* b\nend", "para", 1).text).toBe("* a\n* b\n\npara\n\nend");
 		var t = "* a\r\n* b\r\npara", m = build(t);
 		expect(fmt.move(t, m, idOf(m, "para"), -1).text).toBe("para\r\n\r\n* a\r\n* b");
+		// A comment between the blocks is kept, never deleted
+		expect(run("* a\n* b\n<!-- keep me -->\npara two", "para two", -1).text).toBe("para two\n\n<!-- keep me -->\n\n* a\n* b");
+		expect(run("```\ncode\n```\n<!-- c -->\npara", "para", -1).text).toBe("para\n\n<!-- c -->\n\n```\ncode\n```");
+		// The line after the pair keeps its indentation
+		expect(run("para\n\n```\nx\n```\n  next", "para", 1).text).toBe("```\nx\n```\n\npara\n\n  next");
 		// Items and headings keep their single line break
 		expect(run("* a\n* b", "* b", -1).text).toBe("* b\n* a");
 		expect(run("! A\n! B", "! B", -1).text).toBe("! B\n! A");
