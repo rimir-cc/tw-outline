@@ -238,3 +238,35 @@ exports.findUnit = function(model, start, kind, accept) {
 	}
 	return match;
 };
+
+/*
+Post-operation guard: true when `newText` has the units a structural operation `name` on unit `id` of model
+`before` must leave. Moves keep the unit count and the kinds and levels (as a multiset: the order changes).
+Indent/promote keep the unit count and order; the units of the operated subtree (of the unit's kind) change
+their level by exactly +1/-1, all others keep it. Anything else is refused by the caller (no write).
+*/
+exports.checkOp = function(wiki, before, id, name, newText, title) {
+	var after = exports.buildModel(wiki, newText, title),
+		u = before.units[id];
+	if(!u || after.units.length !== before.units.length) {
+		return false;
+	}
+	function signature(m) {
+		return m.units.map(function(x) { return x.kind + ":" + x.level; }).sort().join(",");
+	}
+	if(name === "move") {
+		return signature(after) === signature(before);
+	}
+	if(name !== "indent" && name !== "promote") {
+		return false;
+	}
+	var delta = name === "indent" ? 1 : -1;
+	for(var i = 0; i < before.units.length; i++) {
+		var a = before.units[i], b = after.units[i],
+			affected = a.kind === u.kind && a.start >= u.start && a.start < u.subtreeEnd;
+		if(a.kind !== b.kind || b.level !== a.level + (affected ? delta : 0)) {
+			return false;
+		}
+	}
+	return true;
+};

@@ -8,10 +8,13 @@ description: Toggle outline mode: select, edit, move and indent the blocks of th
 <%if [<currentTiddler>!has[draft.of]!is[system]!field:code-body[yes]!field:hide-body[yes]] :filter[get[type]else[text/vnd.tiddlywiki]match[text/vnd.tiddlywiki]] %>
 <$let state={{{ [<currentTiddler>addprefix[$:/state/rimir/outline/on/]] }}}
 	on={{{ [<state>get[text]match[yes]] }}}
+	buffer={{{ [<currentTiddler>addprefix[$:/temp/rimir/outline/edit/]] }}}
 	tooltip={{$:/plugins/rimir/outline/ui/toolbar-button!!description}}>
 <$button tooltip=<<tooltip>> aria-label="outline"
 	class={{{ [<tv-config-toolbar-class>] [<on>match[yes]then[tc-selected]] +[join[ ]] }}}>
 <$action-setfield $tiddler=<<state>> text={{{ [<on>match[yes]then[no]else[yes]] }}}/>
+<!-- Switching off discards an edit kept across re-renders -->
+<$action-deletetiddler $filter="[<on>match[yes]then<buffer>]"/>
 <%if [<tv-config-toolbar-icons>match[yes]] %>
 {{$:/plugins/rimir/outline/ui/toolbar-icon}}
 <%endif%>

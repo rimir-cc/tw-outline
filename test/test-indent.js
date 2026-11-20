@@ -76,6 +76,22 @@ describe("outline indent/promote", function() {
 		expect(formats.getFormat("")).toBeTruthy();
 		expect(formats.getFormat("text/x-markdown")).toBe(null);
 	});
+	it("post-op guard refuses a changed unit count and level jumps other than one", function() {
+		var t = "* a\n* b\n** b1\n* c", m = build(t), b = idOf(m, "* b");
+		expect(model.checkOp($tw.wiki, m, b, "indent", "* a\n** b\n*** b1\n* c")).toBe(true);
+		// The subtree stayed behind
+		expect(model.checkOp($tw.wiki, m, b, "indent", "* a\n** b\n** b1\n* c")).toBe(false);
+		// Two levels
+		expect(model.checkOp($tw.wiki, m, b, "indent", "* a\n*** b\n**** b1\n* c")).toBe(false);
+		// A unit outside the subtree changed
+		expect(model.checkOp($tw.wiki, m, b, "indent", "* a\n** b\n*** b1\n** c")).toBe(false);
+		// Unit count changed
+		expect(model.checkOp($tw.wiki, m, b, "indent", "* a\n** b\n*** b1\n\npara")).toBe(false);
+		expect(model.checkOp($tw.wiki, m, b, "promote", "* a\nb\n* b1\n* c")).toBe(false);
+		var h = "! A\n\n!! B\n\nx", mh = build(h);
+		expect(model.checkOp($tw.wiki, mh, idOf(mh, "!! B"), "promote", "! A\n\n! B\n\nx")).toBe(true);
+		expect(model.checkOp($tw.wiki, mh, idOf(mh, "!! B"), "indent", "! A\n\n!!!! B\n\nx")).toBe(false);
+	});
 	it("round trip and range", function() {
 		Object.keys(fixtures.NOTES).forEach(function(name) {
 			var t = fixtures.NOTES[name], m = build(t);
@@ -84,8 +100,11 @@ describe("outline indent/promote", function() {
 				var r = fmt.indent(t, m, u.id);
 				if(!r) { return; }
 				fixtures.assertOnlyRangesChanged(t, r.text, [[u.start, u.subtreeEnd]], expect);
-				var m2 = build(r.text), back = fmt.promote(r.text, m2, m2.units.filter(function(x) { return x.start === r.select; })[0].id);
+				expect(model.checkOp($tw.wiki, m, u.id, "indent", r.text)).withContext(name + " " + u.id).toBe(true);
+				var m2 = build(r.text), nid = m2.units.filter(function(x) { return x.start === r.select; })[0].id,
+					back = fmt.promote(r.text, m2, nid);
 				expect(back && back.text).toBe(t);
+				expect(model.checkOp($tw.wiki, m2, nid, "promote", back.text)).withContext(name + " " + u.id).toBe(true);
 			});
 		});
 	});

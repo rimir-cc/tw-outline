@@ -185,6 +185,29 @@ NOTES.mixedLevels = [
 	""
 ].join("\n");
 
+// Lists, a code block and a table followed by a paragraph after a single line break (no blank line)
+NOTES.touchingBlocks = [
+	"Intro line.",
+	"",
+	"* a",
+	"* b",
+	"Paragraph right after the list.",
+	"",
+	"```",
+	"code",
+	"```",
+	"Paragraph right after the code block.",
+	"",
+	"|x |y |",
+	"|1 |2 |",
+	"Paragraph right after the table.",
+	"",
+	"# one",
+	"# two",
+	"Last paragraph.",
+	""
+].join("\n");
+
 // Empty text and pragma-only text
 NOTES.empty = "";
 NOTES.pragmaOnly = "\\define m() x\n\\procedure p()\nbody\n\\end\n";

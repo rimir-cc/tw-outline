@@ -66,6 +66,42 @@ describe("outline move", function() {
 		var t2 = "a\r\n\r\nb\r\n", m2 = build(t2);
 		expect(fmt.move(t2, m2, idOf(m2, "b"), -1).text).toBe("b\r\n\r\na\r\n");
 	});
+	it("blocks that touch (single line break) are swapped with a blank-line separator", function() {
+		expect(run("* a\n* b\npara", "para", -1).text).toBe("para\n\n* a\n* b");
+		expect(run("para\n\n* a\n* b\nend", "* a\n* b", 1).text).toBe("para\n\nend\n\n* a\n* b");
+		expect(run("```\ncode\n```\npara", "para", -1).text).toBe("para\n\n```\ncode\n```");
+		expect(run("|a |\n|b |\npara", "para", -1).text).toBe("para\n\n|a |\n|b |");
+		// ...and before the content after the pair
+		expect(run("para\n\n* a\n* b\nend", "para", 1).text).toBe("* a\n* b\n\npara\n\nend");
+		var t = "* a\r\n* b\r\npara", m = build(t);
+		expect(fmt.move(t, m, idOf(m, "para"), -1).text).toBe("para\r\n\r\n* a\r\n* b");
+		// Items and headings keep their single line break
+		expect(run("* a\n* b", "* b", -1).text).toBe("* b\n* a");
+		expect(run("! A\n! B", "! B", -1).text).toBe("! B\n! A");
+	});
+	it("post-op guard refuses a move that changes the units", function() {
+		var t = "* a\n* b\npara", m = build(t), p = idOf(m, "para");
+		expect(model.checkOp($tw.wiki, m, p, "move", "para\n\n* a\n* b")).toBe(true);
+		// The old separator-keeping swap merged everything into one paragraph
+		expect(model.checkOp($tw.wiki, m, p, "move", "para\n* a\n* b")).toBe(false);
+		// Same count, other kinds
+		expect(model.checkOp($tw.wiki, m, p, "move", "para\n\n* a\n\n```\nx\n```")).toBe(false);
+		// A move never changes levels
+		expect(model.checkOp($tw.wiki, m, p, "move", "para\n\n* a\n** b")).toBe(false);
+	});
+	it("touching blocks keep their units after a move", function() {
+		["* a\n* b\npara", "para\n\n* a\n* b\nend", "```\ncode\n```\npara"].forEach(function(t) {
+			var m = build(t);
+			m.units.forEach(function(u) {
+				[1, -1].forEach(function(dir) {
+					var r = fmt.move(t, m, u.id, dir);
+					if(r) {
+						expect(build(r.text).units.length).withContext(JSON.stringify(t) + " " + u.id + " " + dir).toBe(m.units.length);
+					}
+				});
+			});
+		});
+	});
 	it("round trip and invariants over the corpus", function() {
 		var moved = 0;
 		Object.keys(fixtures.NOTES).forEach(function(k) {
@@ -86,8 +122,17 @@ describe("outline move", function() {
 						o = m.units[sibs[sibs.indexOf(u.id) + dir]],
 						lo = dir < 0 ? o.start : u.start, hi = dir < 0 ? u.subtreeEnd : o.subtreeEnd;
 					fixtures.assertOnlyRangesChanged(t, r.text, [[lo, hi]], expect);
+					expect(model.checkOp($tw.wiki, m, u.id, "move", r.text)).withContext(k + " " + u.id + " " + dir).toBe(true);
 					var back = fmt.move(r.text, m2, nid, -dir);
-					expect(back && back.text).withContext(k + " " + u.id + " " + dir).toBe(t);
+					// Touching blocks get a blank-line separator: the way back keeps it, so it only gives back the same units
+					var a = dir < 0 ? o : u, b = dir < 0 ? u : o;
+					var blank = /\n[ \t]*\r?\n/, gap = /^\s*/.exec(t.substring(b.subtreeEnd))[0];
+					if(u.kind !== "item" && u.kind !== "heading" && (!blank.test(t.substring(a.subtreeEnd, b.start)) ||
+						(b.subtreeEnd + gap.length < t.length && !blank.test(gap)))) {
+						expect(back && ks(build(back.text))).withContext(k + " " + u.id + " " + dir).toEqual(ks(m));
+					} else {
+						expect(back && back.text).withContext(k + " " + u.id + " " + dir).toBe(t);
+					}
 				});
 			});
 		});

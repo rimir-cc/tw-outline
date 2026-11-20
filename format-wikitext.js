@@ -12,6 +12,9 @@ var utils = require("$:/plugins/rimir/outline/text-utils.js");
 
 exports.types = ["text/vnd.tiddlywiki", ""];
 
+// A separator that contains an empty line
+var BLANK_LINE = /\n[ \t]*\r?\n/;
+
 // Units of `kind` whose start lies in the subtree of u (u included)
 function subtreeUnits(model, u, kind) {
 	return model.units.filter(function(d) {
@@ -73,7 +76,12 @@ exports.promote = function(text, model, id) {
 	return {text: apply(text, edits), select: selectFor(u, edits)};
 };
 
-// Swap the unit's whole subtree with the adjacent sibling of the same class (heading vs non-heading)
+/*
+Swap the unit's whole subtree with the adjacent sibling of the same class (heading vs non-heading).
+Items and headings keep the separators as they are. Other blocks that touch (single line break) get a blank line
+between them and before the content after the pair, because after the swap a paragraph would otherwise absorb the
+block after it.
+*/
 exports.move = function(text, model, id, dir) {
 	var u = model.units[id];
 	if(!u || (dir !== -1 && dir !== 1)) { return null; }
@@ -86,9 +94,20 @@ exports.move = function(text, model, id, dir) {
 	var a = dir < 0 ? o : u, b = dir < 0 ? u : o,
 		A = text.substring(a.start, a.subtreeEnd),
 		sep = text.substring(a.subtreeEnd, b.start),
-		B = text.substring(b.start, b.subtreeEnd);
+		B = text.substring(b.start, b.subtreeEnd),
+		rest = text.substring(b.subtreeEnd);
+	if(u.kind !== "item" && u.kind !== "heading") {
+		var nl = utils.eol(text),
+			gap = /^\s*/.exec(rest)[0];
+		if(!BLANK_LINE.test(sep)) {
+			sep = nl + nl;
+		}
+		if(gap.length < rest.length && !BLANK_LINE.test(gap)) {
+			rest = nl + nl + rest.substring(gap.length);
+		}
+	}
 	return {
-		text: text.substring(0, a.start) + B + sep + A + text.substring(b.subtreeEnd),
+		text: text.substring(0, a.start) + B + sep + A + rest,
 		select: dir < 0 ? a.start : a.start + B.length + sep.length
 	};
 };
@@ -100,9 +119,16 @@ exports.replace = function(text, model, id, newSource) {
 	return {text: utils.splice(text, u.start, u.end, newSource), select: u.start};
 };
 
-// Insert a new sibling unit (item) or first block (heading/block); null for blank source
+/*
+Insert a new sibling unit (item) or first block (heading/block); null for blank source. A new item's text that
+starts with the item's own marker and a space (typed out of habit) loses that marker: it is added anyway.
+*/
 exports.insertNew = function(text, model, id, newSource) {
 	var u = model.units[id];
+	if(u && u.kind === "item" && newSource && newSource.substring(0, u.marker.length) === u.marker &&
+		/^[ \t]/.test(newSource.substring(u.marker.length))) {
+		newSource = newSource.substring(u.marker.length).replace(/^[ \t]+/, "");
+	}
 	if(!u || !newSource || !newSource.trim()) { return null; }
 	var nl = utils.eol(text), pos, insert, select;
 	if(u.kind === "item") {

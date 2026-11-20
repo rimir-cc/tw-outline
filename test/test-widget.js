@@ -200,6 +200,19 @@ describe("outline widget", function() {
 		expect(ids.length).toBe($tw.utils.pushTop([], ids).length);
 	});
 
+	it("does not descend into a same-tiddler transclusion of a field (its positions refer to the field text)", function() {
+		var host = "* a <$transclude $tiddler=\"T\" $field=\"caption\" $mode=\"block\"/>\n* b",
+			k = host.indexOf("* b"),
+			caption = new Array(k - 1).join("x") + "\n\n* c",
+			wiki = makeWiki([{title: "T", text: host, caption: caption}]),
+			r = renderOutline(wiki, "T"),
+			m = r.widget.model;
+		expect(caption.indexOf("* c")).toBe(k);
+		var b = r.widget.units.filter(function(e) { return m.text.substring(e.unit.start, e.unit.end) === "* b"; })[0];
+		expect(b.domNodes.length).toBe(1);
+		expect(b.domNodes[0].textContent).toBe("b");
+	});
+
 	it("renders empty tiddler", function() {
 		var wiki = makeWiki([{title: "T", text: ""}]);
 		var r;
@@ -307,6 +320,21 @@ describe("outline widget", function() {
 			expect(button.getAttribute("class")).toContain("tc-selected");
 			button.invokeActions(button, {});
 			expect(wiki.getTiddlerText("$:/state/rimir/outline/on/A")).toBe("no");
+		});
+
+		it("switching outline mode off discards a kept edit buffer, switching on does not", function() {
+			var BUF = "$:/temp/rimir/outline/edit/A",
+				wiki = buttonWiki([{title: "A", text: "x"}, {title: BUF, text: "typed"}]),
+				r = renderButton(wiki, "A"),
+				button = findWidget(r.root, "button");
+			button.invokeActions(button, {});
+			expect(wiki.getTiddlerText("$:/state/rimir/outline/on/A")).toBe("yes");
+			expect(wiki.getTiddlerText(BUF)).toBe("typed");
+			r.root.refresh({"$:/state/rimir/outline/on/A": {modified: true}});
+			button = findWidget(r.root, "button");
+			button.invokeActions(button, {});
+			expect(wiki.getTiddlerText("$:/state/rimir/outline/on/A")).toBe("no");
+			expect(wiki.tiddlerExists(BUF)).toBe(false);
 		});
 
 		it("is hidden for other types and drafts", function() {

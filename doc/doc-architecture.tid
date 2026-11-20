@@ -16,7 +16,7 @@ type: text/vnd.tiddlywiki
 
 !! Approach
 
-The tiddler is rendered unchanged. A JS widget, `$outline`, wraps the normal body transclusion, walks the rendered widget tree and stamps `data-ol-*` attributes on the DOM node of each unit. One delegated `keydown` and `click` handler lives on the widget's container. Operations are splices of known text ranges. Wrapper elements inside the body are avoided on purpose: they would change the HTML and break CSS such as `ul > li`.
+The tiddler is rendered unchanged. A JS widget, `$outline`, wraps the normal body transclusion, walks the rendered widget tree and stamps `data-ol-*` attributes on the DOM node of each unit. One delegated `keydown` and `click` handler lives on the widget's container. Operations are splices of known text ranges. Wrapper elements inside the body are avoided on purpose: they would change the HTML and break CSS such as `ul > li`. The one exception is the widget's own container: while outline mode is on, the whole body sits inside `div.rr-ol`, so selectors such as `.tc-tiddler-body > p` no longer match (use `.tc-tiddler-body p` or also match `.tc-tiddler-body > .rr-ol > p`).
 
 !! Parts
 
@@ -37,11 +37,15 @@ The tiddler is rendered unchanged. A JS widget, `$outline`, wraps the normal bod
 
 !! Editor
 
-The editor is a real TW edit widget bound to a temp tiddler (`$:/temp/rimir/outline/...`), placed where the unit was. It lives outside the rendered body's widget tree, so a re-render does not destroy it. Typing changes only the temp tiddler; the real tiddler changes once per save.
+The editor is a real TW edit widget bound to a temp tiddler (`$:/temp/rimir/outline/...`), placed where the unit was. It lives outside the rendered body's widget tree, so a re-render of the body does not destroy it. Typing changes only the temp tiddler; the real tiddler changes once per save.
+
+A re-render of an ancestor (for example a changed `$:/tags/Global` or `$:/tags/Macro` tiddler re-renders the page template) or closing the tiddler destroys the `$outline` widget. A buffer that differs from what the editor started with is then kept: it carries `outline-orig-source`, `outline-orig-start`, `outline-orig-text`, `outline-is-new` and `outline-unit-kind`, and the next `$outline` widget of the tiddler reopens the editor at the unit, located as on save (or with the conflict notice when the unit is gone). Escape and switching outline mode off discard it.
 
 !! Writes
 
-A single `wiki.addTiddler` of the old tiddler plus the new `text` and modification fields. Before writing, the text must equal the text the positions were computed from, otherwise nothing is written and the view re-renders.
+A single `wiki.addTiddler` of the old tiddler plus the new `text` and modification fields. Before writing, the text must equal the text the positions were computed from, otherwise the view re-renders first. If the text is this view's own last write (a key pressed before the refresh after a write), the operation goes on on the rebuilt mapping; after any other change nothing is written.
+
+Structural operations pass a model guard (`checkOp` in `model.js`) before they are written: the result is parsed again, and a move must keep the unit count and the kinds and levels; indent/promote must keep the unit count and change only the operated subtree's levels, by exactly one. Anything else is refused without a write. Structural keys do nothing while the view has an open editor.
 
 </$fill>
 </$transclude>

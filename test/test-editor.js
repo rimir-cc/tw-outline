@@ -222,6 +222,20 @@ describe("outline editor", function() {
 		expect(r.text()).toBe("* a\n** a1\n* new\n* b");
 	});
 
+	it("new item with only its marker typed writes nothing and closes", function() {
+		var r = render("* a\n* b");
+		r.widget.startEdit(r.idOf("* a"), {isNew: true});
+		r.type("* ");
+		var before = r.wiki.getTiddler("T");
+		expect(r.widget.saveEdit()).toBe(true);
+		expect(r.wiki.getTiddler("T")).toBe(before);
+		expect(r.widget.editor).toBe(null);
+		r.widget.startEdit(r.idOf("* a"), {isNew: true});
+		r.type("* typed");
+		r.widget.saveEdit();
+		expect(r.text()).toBe("* a\n* typed\n* b");
+	});
+
 	it("new unit after a heading is a paragraph directly under it", function() {
 		var r = render("! H\n\n* x");
 		var id = r.idOf("! H");
@@ -355,6 +369,20 @@ describe("outline editor", function() {
 		expect(r.widget.editor.isNew).toBe(true);
 	});
 
+	it("shift-enter right after a move (before the refresh) edits the moved unit", function() {
+		var r = render("* a\n* b\n* c");
+		r.widget.select(r.idOf("* a"));
+		var ev = {keyCode: 40, shiftKey: false, altKey: true, ctrlKey: false, metaKey: false,
+			target: r.widget.domNode, defaultPrevented: false, prevented: false,
+			preventDefault: function() { this.prevented = true; }, stopPropagation: function() {}};
+		r.widget.handleKeydown(ev);
+		expect(r.text()).toBe("* b\n* a\n* c");
+		expect(r.widget.editSelected()).toBe(true);
+		expect(r.widget.editor).not.toBe(null);
+		expect(r.buffer()).toBe("* a");
+		expect(r.widget.editor.origStart).toBe(4);
+	});
+
 	it("enter is a plain newline in multi-line units", function() {
 		var r = render("```\nx\n```\n\npara");
 		r.widget.startEdit(r.idOf("```\nx\n```"));
@@ -379,15 +407,91 @@ describe("outline editor", function() {
 		expect(events[0].navigateTo).toBe("X");
 	});
 
-	it("destroying the widget (toggle off, close) removes the editor and discards its buffer", function() {
+	it("destroying the widget removes the editor; an unchanged buffer is discarded", function() {
 		var r = render("* a");
 		r.widget.startEdit(r.idOf("* a"));
-		r.type("* typed");
 		var host = r.widget.editor.host;
 		r.widget.destroy({removeDOMNodes: true});
 		expect(r.widget.editor).toBe(null);
 		expect(siblings(host).indexOf(host)).toBe(-1);
 		expect(r.wiki.tiddlerExists(BUF + "T")).toBe(false);
+		// A blank new unit is unchanged too
+		var n = render("* a");
+		n.widget.startEdit(n.idOf("* a"), {isNew: true});
+		n.type("  ");
+		n.widget.destroy({removeDOMNodes: true});
+		expect(n.wiki.tiddlerExists(BUF + "T")).toBe(false);
+	});
+
+	it("destroying the widget keeps a changed buffer; a new widget reopens it at the unit", function() {
+		var r = render("* a\n* b\n* c");
+		r.widget.startEdit(r.idOf("* b"));
+		r.type("* typed");
+		r.widget.destroy({removeDOMNodes: true});
+		expect(r.widget.editor).toBe(null);
+		var buf = r.wiki.getTiddler(BUF + "T");
+		expect(buf.fields.text).toBe("* typed");
+		expect(buf.fields["outline-orig-source"]).toBe("* b");
+		expect(buf.fields["outline-orig-start"]).toBe("4");
+		expect(buf.fields["outline-unit-kind"]).toBe("item");
+		expect(buf.fields["outline-is-new"]).toBe("no");
+		// The re-rendered view (e.g. after a page template refresh) reopens the editor at the same unit
+		var v = secondView(r), ed = v.widget.editor,
+			li = v.widget.units[1 + 1].domNodes[0];
+		expect(ed).not.toBe(null);
+		expect(v.widget.model.text.substring(v.widget.units[ed.id].unit.start, v.widget.units[ed.id].unit.end)).toBe("* b");
+		expect(ed.host.parentNode).toBe(li);
+		expect(hasClass(li, "rr-ol-editing-own")).toBe(true);
+		expect(r.buffer()).toBe("* typed");
+		expect(v.widget.ownsBuffer()).toBe(true);
+		expect(v.widget.saveEdit()).toBe(true);
+		expect(r.text()).toBe("* a\n* typed\n* c");
+		expect(r.wiki.tiddlerExists(BUF + "T")).toBe(false);
+	});
+
+	it("a kept buffer of a new unit reopens after its anchor; escape discards it", function() {
+		var r = render("* a\n** a1\n* b");
+		r.widget.startEdit(r.idOf("* a"), {isNew: true});
+		r.type("new");
+		r.widget.destroy({removeDOMNodes: true});
+		expect(r.wiki.getTiddler(BUF + "T").fields["outline-is-new"]).toBe("yes");
+		var v = secondView(r), ed = v.widget.editor;
+		expect(ed.isNew).toBe(true);
+		expect(ed.host.tag).toBe("li");
+		var li = v.widget.units[0 + 1].domNodes[0];
+		expect(siblings(li).indexOf(ed.host)).toBe(siblings(li).indexOf(li) + 1);
+		expect(v.widget.cancelEdit()).toBe(true);
+		expect(r.wiki.tiddlerExists(BUF + "T")).toBe(false);
+		var w = secondView(r);
+		expect(w.widget.editor).toBe(null);
+	});
+
+	it("a kept buffer whose unit is gone reopens with the conflict notice", function() {
+		var r = render("* a\n* b");
+		r.widget.startEdit(r.idOf("* b"));
+		r.type("* typed");
+		r.widget.destroy({removeDOMNodes: true});
+		r.wiki.addTiddler({title: "T", text: "* a\n* x"});
+		var v = secondView(r), ed = v.widget.editor;
+		expect(ed).not.toBe(null);
+		expect(ed.id).toBe(-1);
+		var found = elements(ed.host).filter(function(el) { return hasClass(el, "rr-ol-conflict"); });
+		expect(found.length).toBe(1);
+		expect(r.buffer()).toBe("* typed");
+		expect(v.widget.saveEdit()).toBe(false);
+		expect(r.text()).toBe("* a\n* x");
+	});
+
+	it("a kept buffer is not reopened while another view owns the editor, nor in read-only wikis", function() {
+		var r = render("* a\n* b");
+		r.widget.startEdit(r.idOf("* b"));
+		r.type("* typed");
+		var v = secondView(r);
+		expect(v.widget.editor).toBe(null);
+		r.widget.destroy({removeDOMNodes: true});
+		r.wiki.addTiddler({title: "$:/status/IsReadOnly", text: "yes"});
+		expect(secondView(r).widget.editor).toBe(null);
+		expect(r.buffer()).toBe("* typed");
 	});
 
 	it("two views: the second view cannot take over or touch the owner's buffer", function() {

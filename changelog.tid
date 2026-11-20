@@ -4,4 +4,4 @@ type: text/vnd.tiddlywiki
 ! Changelog
 
 |!Version |!Date |!Changes |
-|0.0.1 |2026-11-20 |First version: per-tiddler outline mode (ViewToolbar toggle), unit selection, Alt-Up/Down move and Tab/Shift-Tab indent with subtrees, in-place editor (save, save and new, cancel, conflict handling), transclusion jump, configurable shortcuts. Wikitext only. |
+|0.0.1 |2026-11-20 |First version: per-tiddler outline mode (ViewToolbar toggle), unit selection, Alt-Up/Down move and Tab/Shift-Tab indent with subtrees, in-place editor (save, save and new, cancel, conflict handling), transclusion jump, configurable shortcuts. Wikitext only. Moves of touching blocks add a blank-line separator; a model guard refuses structural results that change the units; structural keys are blocked while editing and still act right after a write; a changed edit survives re-renders and closing the tiddler; same-tiddler field transclusions are not mapped; a typed item marker is not doubled. |

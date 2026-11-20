@@ -8,7 +8,8 @@ In-place editor of the $outline widget. install(proto) adds these methods to the
   saveEdit({continue})         - write the edit once; continue: open a new unit after the saved one
   cancelEdit()                 - discard the edit
   insertNewline()              - insert a line break at the caret through the engine
-  reattachEditor()             - after a re-render: put the host next to the relocated unit
+  reattachEditor()             - after a re-render: put the host next to the relocated unit, or reopen a kept edit
+  releaseEditor()              - on destroy: close the editor, keep a changed buffer for the next widget
   handleEditorKeydown(event)   - keys while editing (events from inside the host)
   openTarget(title)            - open a transcluded tiddler in outline mode
 
@@ -26,6 +27,14 @@ this.editor = {host, widget, id, isNew, kind, unitKind, placement, origSource, o
 Buffer: $:/temp/rimir/outline/edit/<title>, one per tiddler. Typing only changes the buffer; the tiddler is
 written once on save. When the same tiddler is shown twice, the view that opened the editor owns the buffer
 (module registry `owners`): other views cannot open a second editor and never touch the buffer.
+The buffer also carries what is needed to reopen the edit: fields outline-orig-source, outline-orig-start,
+outline-orig-text, outline-is-new (yes/no) and outline-unit-kind (for a new unit: those of its anchor).
+
+Kept edits: when the widget is destroyed (an ancestor re-rendered, the tiddler was closed) and the buffer differs
+from what the editor started with, the buffer is kept, not discarded. The next $outline widget of that tiddler
+that maps its units and finds such a buffer without a live owner reopens the editor at the unit (located as on
+save: unchanged text -> the same unit, otherwise the one unit with the same own source and kind); if the unit is
+gone it opens with the conflict notice, so the text stays visible. Escape and the toolbar toggle-off discard it.
 
 \*/
 "use strict";
@@ -49,15 +58,42 @@ var BUFFER_PREFIX = "$:/temp/rimir/outline/edit/",
 	};
 
 // Per wiki: buffer title -> outline widget that owns the open editor for it
-var registries = new WeakMap();
+var registries = new WeakMap(),
+	// Per wiki: buffer title -> {focused, caret} of an editor whose widget was destroyed with a kept buffer
+	restoreHints = new WeakMap();
+
+function registryOf(map, wiki) {
+	var registry = map.get(wiki);
+	if(!registry) {
+		registry = Object.create(null);
+		map.set(wiki, registry);
+	}
+	return registry;
+}
 
 function ownersOf(wiki) {
-	var owners = registries.get(wiki);
-	if(!owners) {
-		owners = Object.create(null);
-		registries.set(wiki, owners);
-	}
-	return owners;
+	return registryOf(registries, wiki);
+}
+
+// Editor state for unit kind `unitKind` (for a new unit: the anchor's kind); id and multiline are set by the caller
+function editorState(unitKind, isNew, origSource, origStart, origText) {
+	return {
+		host: null,
+		widget: null,
+		id: -1,
+		isNew: isNew,
+		kind: isNew ? (unitKind === "item" ? "item" : "block") : unitKind,
+		unitKind: unitKind,
+		placement: isNew ? "after" : (unitKind === "item" ? "inside" : "before"),
+		origSource: origSource,
+		origStart: origStart,
+		origText: origText,
+		multiline: false,
+		notice: null,
+		caret: null,
+		focused: false,
+		hidden: []
+	};
 }
 
 var methods = {};
@@ -94,42 +130,102 @@ methods.startEdit = function(id, opts) {
 		owner.focusEditor();
 		return false;
 	}
-	if(this.isReadOnly() || !this.isSelectable(id) || !this.getAdapter()) {
+	if(this.isReadOnly() || !this.getAdapter()) {
 		return false;
 	}
 	if(this.wiki.getTiddlerText(this.tiddlerTitle, "") !== this.model.text) {
-		// An outside change has not been rendered yet: positions are stale
-		this.rebuild();
+		// A change has not been rendered yet: positions are stale. After this view's own write the selection is
+		// restored from the saved one, so an edit of the selected unit can go on; otherwise do nothing
+		var fromSelection = id === this.selectedId;
+		if(!this.ensureCurrent() || !fromSelection) {
+			return false;
+		}
+		id = this.selectedId;
+	}
+	if(!this.isSelectable(id)) {
 		return false;
 	}
 	var unit = this.units[id].unit,
 		isNew = !!opts.isNew,
-		adapter = this.getAdapter();
-	this.editor = {
-		host: null,
-		widget: null,
-		id: id,
-		isNew: isNew,
-		kind: isNew ? (unit.kind === "item" ? "item" : "block") : unit.kind,
-		unitKind: unit.kind,
-		placement: isNew ? "after" : (unit.kind === "item" ? "inside" : "before"),
-		origSource: this.model.text.substring(unit.start, unit.end),
-		origStart: unit.start,
-		origText: this.model.text,
-		multiline: !isNew && adapter.isMultiline(this.model, id),
-		notice: null,
-		caret: null,
-		focused: false,
-		hidden: []
-	};
+		adapter = this.getAdapter(),
+		ed = editorState(unit.kind, isNew, this.model.text.substring(unit.start, unit.end), unit.start, this.model.text);
+	ed.id = id;
+	ed.multiline = !isNew && adapter.isMultiline(this.model, id);
+	this.editor = ed;
 	ownersOf(this.wiki)[this.bufferTitle()] = this;
 	this.wiki.addTiddler(new $tw.Tiddler({
 		title: this.bufferTitle(),
 		text: isNew ? "" : adapter.editSource(this.model.text, this.model, id),
-		type: "text/vnd.tiddlywiki"
+		type: "text/vnd.tiddlywiki",
+		"outline-orig-source": ed.origSource,
+		"outline-orig-start": String(ed.origStart),
+		"outline-orig-text": ed.origText,
+		"outline-is-new": isNew ? "yes" : "no",
+		"outline-unit-kind": ed.unitKind
 	}));
 	this.placeEditor(true);
 	return true;
+};
+
+/*
+Reopen a kept edit (see "Kept edits" above). Returns true when an editor was opened. Not while another live view
+owns the editor, in read-only wikis, or for tiddlers without an adapter.
+*/
+methods.restoreEditor = function() {
+	var title = this.bufferTitle(),
+		buffer = this.wiki.getTiddler(title);
+	if(this.editor || !buffer || buffer.fields["outline-orig-start"] === undefined || this.otherOwner() ||
+		this.isReadOnly() || !this.getAdapter()) {
+		return false;
+	}
+	var f = buffer.fields,
+		hints = registryOf(restoreHints, this.wiki),
+		hint = hints[title] || {},
+		ed = editorState(f["outline-unit-kind"] || "", f["outline-is-new"] === "yes", f["outline-orig-source"] || "",
+			parseInt(f["outline-orig-start"], 10), f["outline-orig-text"] || "");
+	delete hints[title];
+	this.editor = ed;
+	ownersOf(this.wiki)[title] = this;
+	var target = this.locateEditUnit(this.model.text);
+	ed.id = target && this.isSelectable(target.id) ? target.id : -1;
+	if(ed.id === -1) {
+		ed.notice = "conflict";
+	}
+	ed.multiline = !ed.isNew && (ed.id === -1 ? /[\r\n]/.test(ed.origSource) : this.getAdapter().isMultiline(this.model, ed.id));
+	ed.caret = hint.caret || null;
+	this.placeEditor(!!hint.focused);
+	if(hint.focused) {
+		this.focusEditor();
+	}
+	return true;
+};
+
+// True when the buffer differs from what the editor started with (new unit: anything typed)
+methods.editChanged = function() {
+	var ed = this.editor,
+		text = this.wiki.getTiddlerText(this.bufferTitle());
+	if(!ed || text === undefined) {
+		return false;
+	}
+	return ed.isNew ? /\S/.test(text) : text !== ed.origSource;
+};
+
+/*
+The widget goes away (ancestor re-render, tiddler closed, outline mode off): close the editor. A changed buffer
+is kept for the next widget of this tiddler (restoreEditor), with the focus and caret; otherwise it is discarded.
+*/
+methods.releaseEditor = function() {
+	if(!this.editor) {
+		return;
+	}
+	var keep = this.ownsBuffer() && this.editChanged();
+	if(keep) {
+		var engine = this.editorEngine(),
+			caret = engine && engine.domNode && typeof engine.domNode.selectionStart === "number" ?
+				[engine.domNode.selectionStart, engine.domNode.selectionEnd] : null;
+		registryOf(restoreHints, this.wiki)[this.bufferTitle()] = {focused: this.editor.focused, caret: caret};
+	}
+	this.closeEditor(!keep);
 };
 
 // Create host + editor widget at the place of this.editor.id (or at the end of the container).
@@ -137,7 +233,7 @@ methods.startEdit = function(id, opts) {
 methods.placeEditor = function(focus) {
 	var ed = this.editor,
 		nodes = ed.id === -1 ? [] : this.units[ed.id].domNodes,
-		host = this.document.createElement(ed.placement === "after" && ed.unitKind === "item" ? "li" : "div"),
+		host = this.document.createElement(ed.placement === "after" && ed.unitKind === "item" && nodes.length ? "li" : "div"),
 		self = this;
 	host.className = HOST_CLASS;
 	if(!nodes.length) {
@@ -282,6 +378,12 @@ methods.saveEdit = function(opts) {
 	var result;
 	if(ed.isNew) {
 		result = adapter.insertNew(current, target.model, target.id, newSource.replace(/\r?\n/g, utils.eol(current)));
+		if(!result) {
+			// Nothing left to insert (e.g. only the item marker was typed): like a blank new unit
+			this.closeEditor(true);
+			dom.focus(this.domNode);
+			return true;
+		}
 	} else if(blank) {
 		result = adapter.remove(current, target.model, target.id);
 		if(!result) {
@@ -297,7 +399,7 @@ methods.saveEdit = function(opts) {
 	dom.focus(this.domNode);
 	var written = result.text !== current;
 	if(written) {
-		this.wiki.addTiddler(new $tw.Tiddler(tiddler, {text: result.text}, this.wiki.getModificationFields()));
+		this.writeText(tiddler, result.text);
 	}
 	this.saveSelection(result.select, index, blank ? "" : kind);
 	if(opts["continue"] && !blank) {
@@ -350,7 +452,9 @@ buffer, so typed text is kept. It gets the focus (and caret) back only if it had
 methods.reattachEditor = function() {
 	var ed = this.editor;
 	if(!ed) {
-		this.runPendingContinue();
+		if(!this.restoreEditor()) {
+			this.runPendingContinue();
+		}
 		return;
 	}
 	var target = this.locateEditUnit(this.model.text);

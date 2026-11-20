@@ -40,7 +40,7 @@ In multi-line units (code blocks, tables, widgets, `"""` items) Enter is a plain
 
 !! Move
 
-Swap the unit's whole subtree with the adjacent sibling's whole subtree, blank-line separators preserved. First/last child: no-op.
+Swap the unit's whole subtree with the adjacent sibling's whole subtree, blank-line separators preserved. Blocks other than items and headings that touch (a single line break) get a blank line between them and before the following content, so a paragraph cannot absorb its neighbour. First/last child: no-op.
 
 * List item: siblings are items of the same list at the same depth.
 * Heading: siblings are headings of the same level in the same parent.

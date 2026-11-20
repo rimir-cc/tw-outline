@@ -17,6 +17,7 @@ be selected.
 
 var formats = require("$:/plugins/rimir/outline/formats.js"),
 	findUnit = require("$:/plugins/rimir/outline/model.js").findUnit,
+	checkOp = require("$:/plugins/rimir/outline/model.js").checkOp,
 	dom = require("$:/plugins/rimir/outline/dom-utils.js"),
 	setClass = dom.setClass,
 	focus = dom.focus,
@@ -139,6 +140,8 @@ methods.restoreSelection = function() {
 
 // Select the previous (-1) or next (1) selectable unit. Without a selection: the first or last one.
 methods.step = function(dir) {
+	// Positions of an unrendered change are stale: remap first (selecting writes nothing)
+	this.ensureCurrent();
 	var id = this.selectedId, i;
 	if(id === -1) {
 		i = dir > 0 ? this.nearestSelectable(0) : this.lastSelectable();
@@ -177,29 +180,56 @@ methods.openTransclusion = function() {
 
 /*
 Run adapter operation `name` on the selected unit. Returns true when a unit is selected (the key is
-consumed), whether or not the text changed.
+consumed), whether or not the text changed. A result that fails the model guard (checkOp) is not written.
 */
 methods.operate = function(name, arg) {
 	var id = this.selectedId;
 	if(id === -1) {
 		return false;
 	}
-	if(this.isReadOnly()) {
+	// Read-only, or an open editor in this view (a move could rewrite the edited unit): consumed, no write
+	if(this.isReadOnly() || this.editor) {
 		return true;
 	}
+	if(!this.ensureCurrent()) {
+		return true;
+	}
+	id = this.selectedId;
 	var tiddler = this.wiki.getTiddler(this.tiddlerTitle),
-		text = tiddler ? (tiddler.fields.text || "") : "";
-	if(!tiddler || text !== this.model.text) {
-		// An outside change has not been rendered yet: positions are stale
-		this.rebuild();
-		return true;
-	}
-	var adapter = formats.getFormat(tiddler.fields.type);
+		text = tiddler.fields.text || "",
+		adapter = formats.getFormat(tiddler.fields.type);
 	if(!adapter || !adapter[name]) {
 		return true;
 	}
-	this.applyResult(adapter[name](text, this.model, id, arg));
+	var result = adapter[name](text, this.model, id, arg);
+	// Guard: never write a result that changes units the operation must leave alone
+	if(result && result.text !== text && !checkOp(this.wiki, this.model, id, name, result.text, this.tiddlerTitle)) {
+		return true;
+	}
+	this.applyResult(result);
 	return true;
+};
+
+/*
+True when the positions of this.model fit the tiddler's current text (the tiddler exists). When the text changed
+and that change has not been rendered yet, the body is rebuilt first. If the change is this view's own last write
+(a key pressed before the refresh after a write), the rebuilt mapping and the restored selection are valid and
+the result is true; after any other change it is false (positions are not trusted for a write: do nothing).
+*/
+methods.ensureCurrent = function() {
+	var tiddler = this.wiki.getTiddler(this.tiddlerTitle),
+		text = tiddler ? (tiddler.fields.text || "") : "";
+	if(tiddler && text === this.model.text) {
+		return true;
+	}
+	this.rebuild();
+	return !!tiddler && text === this.lastWritten && this.model.text === text && this.selectedId !== -1;
+};
+
+// Write `text` to the tiddler (one change) and remember it as this view's own last write
+methods.writeText = function(tiddler, text) {
+	this.lastWritten = text;
+	this.wiki.addTiddler(new $tw.Tiddler(tiddler, {text: text}, this.wiki.getModificationFields()));
 };
 
 /*
@@ -215,7 +245,7 @@ methods.applyResult = function(result) {
 		kind = id === -1 ? "" : this.units[id].unit.kind;
 	// Same text (e.g. two identical siblings swapped): no write, but the frame still follows result.select
 	if(!old || result.text !== (old.fields.text || "")) {
-		this.wiki.addTiddler(new $tw.Tiddler(old, {text: result.text}, this.wiki.getModificationFields()));
+		this.writeText(old, result.text);
 	}
 	this.saveSelection(result.select, id === -1 ? 0 : id, kind);
 	return true;

@@ -48,7 +48,19 @@ Only one view can edit at a time.
 
 !! What happens to an unsaved edit?
 
-Closing the tiddler or toggling outline mode off discards it.
+Escape or toggling outline mode off discards it. If you changed the text and the view is rendered again (for example after a global macro changed) or you close the tiddler, the text is kept: the editor opens again at the unit as soon as the tiddler is shown in outline mode. If the unit is gone by then, the editor opens with the "changed underneath" notice, so you can copy your text. Kept text lives in a `$:/temp/` tiddler and is gone after a reload.
+
+!! Why does Alt-Up/Down add a blank line?
+
+When a list, code block or table is followed directly (single line break) by a paragraph, swapping them as they are would merge the paragraph with its new neighbour. Such blocks get a blank line between them. Items and headings keep their line breaks.
+
+!! Why do Tab and Alt-Up/Down do nothing while I edit?
+
+Structural keys are blocked while the view has an open editor: a move could rewrite the unit you are editing. Save or cancel first.
+
+!! My CSS for `.tc-tiddler-body > p` stopped working
+
+While outline mode is on, the body is wrapped in `div.rr-ol`, so child selectors of `.tc-tiddler-body` no longer match. Use a descendant selector (`.tc-tiddler-body p`) or also match `.tc-tiddler-body > .rr-ol > p`.
 
 !! Do `AI:` lines of llm-inline fire?
 

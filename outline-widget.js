@@ -73,6 +73,7 @@ OutlineWidget.prototype.execute = function() {
 	this.editor = null;
 	this.pendingContinue = null;
 	this.markerHtml = null;
+	this.lastWritten = null;
 	this.makeChildWidgets();
 };
 
@@ -97,11 +98,12 @@ OutlineWidget.prototype.refresh = function(changedTiddlers) {
 	return refreshed;
 };
 
-// Remove the editor (it is not part of the children). Closing the view discards the edit (owned buffer).
+/*
+Remove the editor (it is not part of the children). A changed buffer is kept and reopened by the next widget of
+this tiddler (an ancestor re-render destroys this widget); an unchanged one is discarded (releaseEditor).
+*/
 OutlineWidget.prototype.destroy = function(options) {
-	if(this.editor) {
-		this.closeEditor(true);
-	}
+	this.releaseEditor();
 	Widget.prototype.destroy.call(this, options);
 };
 
@@ -249,7 +251,7 @@ OutlineWidget.prototype.findBodyTransclude = function(widget) {
 	for(var i = 0; i < widget.children.length; i++) {
 		var child = widget.children[i];
 		if(child.parseTreeNode && child.parseTreeNode.type === "transclude" &&
-			!child.transcludeVariable && child.transcludeTitle === this.tiddlerTitle) {
+			!child.transcludeVariable && child.transcludeTitle === this.tiddlerTitle && rendersText(child)) {
 			return child;
 		}
 		var found = this.findBodyTransclude(child);
@@ -307,11 +309,19 @@ function isSyntheticItem(node) {
 		LIST_TAGS[first.tag] && first.start === node.start;
 }
 
-// A transclude widget of another tiddler or of a variable: its positions refer to another text
+/*
+A transclude widget of another tiddler, of a variable, or of another field or an index of this tiddler: its
+positions refer to another text
+*/
 function isForeign(widget, title) {
 	var node = widget.parseTreeNode;
 	return !!node && node.type === "transclude" &&
-		(!!widget.transcludeVariable || widget.transcludeTitle !== title);
+		(!!widget.transcludeVariable || widget.transcludeTitle !== title || !rendersText(widget));
+}
+
+// True when a transclude widget renders the text field (no other field, no index)
+function rendersText(widget) {
+	return (!widget.transcludeField || widget.transcludeField === "text") && !widget.transcludeIndex;
 }
 
 // The widget's own element nodes, or for DOM-less widgets the top-level element nodes of its descendants

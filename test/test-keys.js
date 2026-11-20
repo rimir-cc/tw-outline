@@ -241,6 +241,22 @@ describe("outline selection and keys", function() {
 		expect(selectedUnit(r).start).toBe(0);
 	});
 
+	it("refuses (no write) an adapter result that changes the units", function() {
+		var fmt = require("$:/plugins/rimir/outline/format-wikitext.js"),
+			wiki = makeWiki([{title: "T", text: "* a\n* b\npara"}]),
+			r = renderOutline(wiki, "T"),
+			before = wiki.getTiddler("T");
+		r.widget.select(idOf(r, "para"));
+		spyOn(fmt, "move").and.returnValue({text: "para\n* a\n* b", select: 0});
+		expect(key(r, KEYS.up, {alt: true}).prevented).toBe(true);
+		expect(fmt.move).toHaveBeenCalled();
+		expect(wiki.getTiddler("T")).toBe(before);
+		spyOn(fmt, "indent").and.returnValue({text: "* a\n*** b\npara", select: 4});
+		r.widget.select(idOf(r, "* b"));
+		expect(key(r, KEYS.tab).prevented).toBe(true);
+		expect(wiki.getTiddler("T")).toBe(before);
+	});
+
 	it("read-only allows selection only", function() {
 		var wiki = makeWiki([{title: "T", text: "* a\n* b"}, {title: "$:/status/IsReadOnly", text: "yes"}]),
 			r = renderOutline(wiki, "T"),
@@ -271,6 +287,35 @@ describe("outline selection and keys", function() {
 		expect(r.widget.units.length).toBe(4);
 		expect(r.widget.domNode).toBe(domNode);
 		expect(selectedSource(r)).toBe("* b");
+	});
+
+	it("keys pressed before the refresh after our own write still act (no refresh in between)", function() {
+		var wiki = makeWiki([{title: "T", text: "* a\n* b\n* c\n* d"}]),
+			r = renderOutline(wiki, "T");
+		r.widget.select(idOf(r, "* a"));
+		key(r, KEYS.down, {alt: true});
+		expect(wiki.getTiddlerText("T")).toBe("* b\n* a\n* c\n* d");
+		key(r, KEYS.down, {alt: true});
+		expect(wiki.getTiddlerText("T")).toBe("* b\n* c\n* a\n* d");
+		// Down right after a write steps from the moved unit in the new text
+		key(r, KEYS.down);
+		expect(selectedSource(r)).toBe("* d");
+		key(r, KEYS.up, {alt: true});
+		expect(wiki.getTiddlerText("T")).toBe("* b\n* c\n* d\n* a");
+	});
+
+	it("structural keys do nothing while this view has an open editor", function() {
+		var wiki = makeWiki([{title: "T", text: "* a\n* b\n* c"}]),
+			r = renderOutline(wiki, "T"),
+			before = wiki.getTiddler("T");
+		r.widget.startEdit(idOf(r, "* b"));
+		expect(r.widget.editor).not.toBe(null);
+		r.widget.select(idOf(r, "* c"));
+		expect(key(r, KEYS.up, {alt: true}).prevented).toBe(true);
+		expect(key(r, KEYS.tab).prevented).toBe(true);
+		r.widget.select(idOf(r, "* a"));
+		expect(key(r, KEYS.down, {alt: true}).prevented).toBe(true);
+		expect(wiki.getTiddler("T")).toBe(before);
 	});
 
 	it("re-selects by start, else by clamped index", function() {

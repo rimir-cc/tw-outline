@@ -48,6 +48,16 @@ describe("outline edit", function() {
 		expect(r.select).toBe(4);
 	});
 
+	it("new item: a typed leading marker equal to the item's marker is not doubled", function() {
+		var text = "* a\n** a1\n* b", m = build(text);
+		expect(fmt.insertNew(text, m, idOf(m, "* a"), "* foo").text).toBe("* a\n** a1\n* foo\n* b");
+		expect(fmt.insertNew(text, m, idOf(m, "** a1"), "**  deep").text).toBe("* a\n** a1\n** deep\n* b");
+		// Other text that starts with marker characters stays
+		expect(fmt.insertNew(text, m, idOf(m, "* a"), "*bold*").text).toBe("* a\n** a1\n* *bold*\n* b");
+		expect(fmt.insertNew(text, m, idOf(m, "* a"), "** deeper").text).toBe("* a\n** a1\n* ** deeper\n* b");
+		// Only the marker: nothing to insert
+		expect(fmt.insertNew(text, m, idOf(m, "* a"), "*  ")).toBeNull();
+	});
 	it("new item keeps CRLF", function() {
 		var text = "* a\r\n** a1\r\n* b", m = build(text),
 			r = fmt.insertNew(text, m, idOf(m, "* a"), "x");
