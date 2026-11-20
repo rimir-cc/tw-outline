@@ -1,4 +1,8 @@
 title: $:/plugins/rimir/outline/ui/body
 code-body: yes
 
-<$outline tiddler=<<currentTiddler>>><$transclude $tiddler=<<currentTiddler>> $mode="block"/></$outline>
+<$outline tiddler=<<currentTiddler>>>
+
+<$transclude $tiddler=<<currentTiddler>> $mode="block"/>
+
+</$outline>
