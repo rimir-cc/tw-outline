@@ -92,3 +92,43 @@ exports.move = function(text, model, id, dir) {
 		select: dir < 0 ? a.start : a.start + B.length + sep.length
 	};
 };
+
+// Replace the unit's own source with newSource
+exports.replace = function(text, model, id, newSource) {
+	var u = model.units[id];
+	if(!u) { return null; }
+	return {text: utils.splice(text, u.start, u.end, newSource), select: u.start};
+};
+
+// Insert a new sibling unit (item) or first block (heading/block); null for blank source
+exports.insertNew = function(text, model, id, newSource) {
+	var u = model.units[id];
+	if(!u || !newSource || !newSource.trim()) { return null; }
+	var nl = utils.eol(text), pos, insert, select;
+	if(u.kind === "item") {
+		pos = u.subtreeEnd;
+		insert = nl + u.marker + " " + newSource;
+		select = pos + nl.length;
+	} else {
+		pos = u.end;
+		insert = nl + nl + newSource;
+		select = pos + 2 * nl.length;
+		var rest = text.substring(pos);
+		if(rest && !/^\r?\n[ \t]*\r?\n/.test(rest)) { insert += nl; }
+	}
+	return {text: utils.splice(text, pos, pos, insert), select: select};
+};
+
+// What the editor shows
+exports.editSource = function(text, model, id) {
+	var u = model.units[id];
+	return u ? text.substring(u.start, u.end) : "";
+};
+
+// True when Enter must be a plain newline in the editor
+exports.isMultiline = function(model, id) {
+	var u = model.units[id];
+	if(!u) { return false; }
+	if(u.tag === "codeblock" || u.tag === "table" || u.kind === "widget" || u.kind === "container") { return true; }
+	return /[\r\n]/.test(model.text.substring(u.start, u.end));
+};

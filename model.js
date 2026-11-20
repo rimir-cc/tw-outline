@@ -33,6 +33,7 @@ exports.buildModel = function(wiki, text, title) {
 
 	// Own range end without trailing line breaks (some rules include the newline)
 	function trimEnd(start, end) {
+		end = Math.min(end, text.length);
 		while(end > start && (text.charAt(end - 1) === "\n" || text.charAt(end - 1) === "\r")) {
 			end--;
 		}
