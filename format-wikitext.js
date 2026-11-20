@@ -82,6 +82,7 @@ exports.move = function(text, model, id, dir) {
 	if(i < 0 || n === undefined) { return null; }
 	var o = model.units[n];
 	if((o.kind === "heading") !== (u.kind === "heading")) { return null; }
+	if((u.kind === "heading" || u.kind === "item") && (o.kind !== u.kind || o.level !== u.level)) { return null; }
 	var a = dir < 0 ? o : u, b = dir < 0 ? u : o,
 		A = text.substring(a.start, a.subtreeEnd),
 		sep = text.substring(a.subtreeEnd, b.start),

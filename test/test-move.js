@@ -44,21 +44,27 @@ describe("outline move", function() {
 		expect(run("* a\n* b\n\np", "* b", 1)).toBe(null);
 		expect(run("intro\n\n! H\n\nx", "intro", 1)).toBe(null);
 		expect(run("intro\n\n! H\n\nx", "! H", -1)).toBe(null);
+		expect(run("! P\n\n!!! c\n\n!! d", "!! d", -1)).toBe(null);
+		expect(run("* a\n*** c\n** d", "** d", -1)).toBe(null);
 	});
 	it("container", function() {
 		var t = "<div>\n\np1\n\np2\n\n</div>";
 		expect(run(t, "p1", 1).text).toBe("<div>\n\np2\n\np1\n\n</div>");
 		expect(run(t, "p2", 1)).toBe(null);
 	});
+	it("container moves as a whole", function() {
+		var t = "<div>\n\np1\n\n</div>\n\nafter";
+		expect(run(t, "after", -1).text).toBe("after\n\n<div>\n\np1\n\n</div>");
+	});
 	it("move last unit without trailing newline", function() {
 		expect(run("p1\n\np2", "p2", -1).text).toBe("p2\n\np1");
 		expect(run("* a\n* b", "* b", -1).text).toBe("* b\n* a");
 	});
 	it("keeps CRLF", function() {
-		var t = fixtures.NOTES.crlf, m = build(t);
-		var r = fmt.move(t, m, idOf(m, "* four"), -1);
-		expect(r.text.replace(/\r\n/g, "").indexOf("\n")).toBe(-1);
-		expect(r.text.replace(/\r\n/g, "").indexOf("\r")).toBe(-1);
+		var t = "* one\r\n* two\r\n\r\np", m = build(t);
+		expect(fmt.move(t, m, idOf(m, "* two"), -1).text).toBe("* two\r\n* one\r\n\r\np");
+		var t2 = "a\r\n\r\nb\r\n", m2 = build(t2);
+		expect(fmt.move(t2, m2, idOf(m2, "b"), -1).text).toBe("b\r\n\r\na\r\n");
 	});
 	it("round trip and invariants over the corpus", function() {
 		var moved = 0;

@@ -171,6 +171,20 @@ NOTES.noTrailingNewline = [
 	"* last item without newline"
 ].join("\n");
 
+// Headings and list items that skip levels
+NOTES.mixedLevels = [
+	"! P",
+	"",
+	"!!! c",
+	"",
+	"!! d",
+	"",
+	"* a",
+	"*** c",
+	"** d",
+	""
+].join("\n");
+
 // Empty text and pragma-only text
 NOTES.empty = "";
 NOTES.pragmaOnly = "\\define m() x\n\\procedure p()\nbody\n\\end\n";
