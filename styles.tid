@@ -1,0 +1,41 @@
+title: $:/plugins/rimir/outline/styles
+tags: $:/tags/Stylesheet
+
+\rules only filteredtranscludeinline transcludeinline macrodef macrocallinline
+
+.rr-ol {
+	outline: none;
+}
+
+.rr-ol-selected {
+	outline: 1px solid <<colour primary>>;
+	outline-offset: 2px;
+}
+
+.rr-ol-editing {
+	display: none;
+}
+
+.rr-ol-tmark {
+	display: inline-block;
+	margin-left: 0.4em;
+	vertical-align: middle;
+	line-height: 1;
+	cursor: pointer;
+	opacity: 0.35;
+	transition: opacity 0.15s ease-in-out;
+}
+
+.rr-ol-tmark svg {
+	width: 0.8em;
+	height: 0.8em;
+	fill: <<colour muted-foreground>>;
+}
+
+.rr-ol-tmark:hover {
+	opacity: 1;
+}
+
+.rr-ol-tmark:hover svg {
+	fill: <<colour primary>>;
+}

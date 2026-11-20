@@ -1,0 +1,4 @@
+title: $:/plugins/rimir/outline/ui/transclusion-marker
+description: Content of the marker the $outline widget appends to transclusion units (class rr-ol-tmark, title = target)
+
+{{$:/core/images/link}}
