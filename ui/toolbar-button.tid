@@ -4,8 +4,8 @@ caption: {{$:/plugins/rimir/outline/ui/toolbar-icon}} outline
 description: Toggle outline mode: select, edit, move and indent the blocks of this tiddler in place
 
 \whitespace trim
-<!-- Only for wikitext tiddlers that are not drafts. State: $:/state/rimir/outline/on/<title> = yes/no -->
-<%if [<currentTiddler>!has[draft.of]] :filter[get[type]else[text/vnd.tiddlywiki]match[text/vnd.tiddlywiki]] %>
+<!-- Only for wikitext tiddlers that are not drafts, system tiddlers, code-body or hide-body tiddlers. State: $:/state/rimir/outline/on/<title> = yes/no -->
+<%if [<currentTiddler>!has[draft.of]!is[system]!field:code-body[yes]!field:hide-body[yes]] :filter[get[type]else[text/vnd.tiddlywiki]match[text/vnd.tiddlywiki]] %>
 <$let state={{{ [<currentTiddler>addprefix[$:/state/rimir/outline/on/]] }}}
 	on={{{ [<state>get[text]match[yes]] }}}
 	tooltip={{$:/plugins/rimir/outline/ui/toolbar-button!!description}}>

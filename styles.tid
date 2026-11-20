@@ -12,6 +12,11 @@ tags: $:/tags/Stylesheet
 	outline-offset: 2px;
 }
 
+/* Another view of the same tiddler shows the selection without keyboard focus */
+.rr-ol:not(:focus-within) .rr-ol-selected {
+	outline-color: <<colour muted-foreground>>;
+}
+
 .rr-ol-editing {
 	display: none;
 }

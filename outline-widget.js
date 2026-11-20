@@ -9,8 +9,9 @@ text to the rendered DOM nodes and stamps them with data-ol-* attributes.
 <$outline tiddler=<<currentTiddler>>><$transclude $tiddler=<<currentTiddler>> $mode="block"/></$outline>
 
 After render and refresh:
-  widget.model  - buildModel() of the tiddler text
-  widget.units  - [{unit, domNodes:[Element]}] in model order
+  widget.model      - buildModel() of the tiddler text
+  widget.units      - [{unit, domNodes:[Element]}] in model order
+  widget.selectedId - selected unit id or -1 (selection and keys: outline-keys.js)
 
 Matching rule (unit <-> widget): a widget matches a unit when its parseTreeNode.start equals the
 unit's anchor (the unit start; for $$$ typed blocks the start of the line after the $$$ header,
@@ -22,7 +23,8 @@ trailing line breaks and extends lists to their subtree end.
 "use strict";
 
 var Widget = require("$:/core/modules/widgets/widget.js").widget,
-	buildModel = require("$:/plugins/rimir/outline/model.js").buildModel;
+	buildModel = require("$:/plugins/rimir/outline/model.js").buildModel,
+	keys = require("$:/plugins/rimir/outline/outline-keys.js");
 
 var MARKER_TIDDLER = "$:/plugins/rimir/outline/ui/transclusion-marker",
 	LIST_TAGS = {ul: true, ol: true, dl: true, blockquote: true},
@@ -35,6 +37,9 @@ var OutlineWidget = function(parseTreeNode, options) {
 
 OutlineWidget.prototype = new Widget();
 
+// Selection, keys and structural operations: select, step, operate, applyResult, handleKeydown, handleClick
+keys.install(OutlineWidget.prototype);
+
 OutlineWidget.prototype.render = function(parent, nextSibling) {
 	this.parentDomNode = parent;
 	this.computeAttributes();
@@ -42,6 +47,9 @@ OutlineWidget.prototype.render = function(parent, nextSibling) {
 	var domNode = this.document.createElement("div");
 	domNode.className = "rr-ol";
 	domNode.setAttribute("tabindex", "0");
+	var self = this;
+	domNode.addEventListener("keydown", function(event) { self.handleKeydown(event); }, false);
+	domNode.addEventListener("click", function(event) { self.handleClick(event); }, false);
 	parent.insertBefore(domNode, nextSibling);
 	this.renderChildren(domNode, null);
 	this.domNodes.push(domNode);
@@ -54,6 +62,8 @@ OutlineWidget.prototype.execute = function() {
 	this.model = null;
 	this.units = [];
 	this.markers = [];
+	this.selectedId = -1;
+	this.selectedNodes = [];
 	this.makeChildWidgets();
 };
 
@@ -66,8 +76,25 @@ OutlineWidget.prototype.refresh = function(changedTiddlers) {
 	var refreshed = this.refreshChildren(changedTiddlers);
 	if(refreshed || changedTiddlers[this.tiddlerTitle]) {
 		this.mapUnits();
+	} else if(changedTiddlers[this.selectionTitle()]) {
+		this.restoreSelection();
 	}
 	return refreshed;
+};
+
+/*
+Re-render the children into the same container (keeps the focus) and remap. Used when the text changed
+before the change was rendered.
+*/
+OutlineWidget.prototype.rebuild = function() {
+	this.clearStamps();
+	this.showSelection(-1);
+	$tw.utils.each(this.children, function(child) {
+		child.destroy({removeDOMNodes: true});
+	});
+	this.makeChildWidgets();
+	this.renderChildren(this.domNode, null);
+	this.mapUnits();
 };
 
 /*
@@ -89,6 +116,7 @@ OutlineWidget.prototype.mapUnits = function() {
 	$tw.utils.each(this.units, function(entry) {
 		self.stamp(entry);
 	});
+	this.restoreSelection();
 };
 
 // Remove stamps and markers of the previous mapping (DOM nodes that were not re-rendered keep them otherwise)

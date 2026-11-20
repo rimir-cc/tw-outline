@@ -2,4 +2,4 @@ title: $:/plugins/rimir/outline/ui/body-filter
 tags: $:/tags/ViewTemplateBodyFilter
 list-before: 
 
-[<currentTiddler>!has[draft.of]] :filter[get[type]else[text/vnd.tiddlywiki]match[text/vnd.tiddlywiki]] :filter[addprefix[$:/state/rimir/outline/on/]get[text]match[yes]] :then[[$:/plugins/rimir/outline/ui/body]]
+[<currentTiddler>!has[draft.of]!is[system]!field:code-body[yes]!field:hide-body[yes]] :filter[get[type]else[text/vnd.tiddlywiki]match[text/vnd.tiddlywiki]] :filter[addprefix[$:/state/rimir/outline/on/]get[text]match[yes]] :then[[$:/plugins/rimir/outline/ui/body]]

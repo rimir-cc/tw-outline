@@ -279,6 +279,19 @@ describe("outline widget", function() {
 			expect(findWidget(renderButton(wiki, "M").root, "button")).toBe(null);
 			expect(findWidget(renderButton(wiki, "D").root, "button")).toBe(null);
 		});
+
+		it("is hidden for system tiddlers and code-body or hide-body tiddlers", function() {
+			var wiki = buttonWiki([
+				{title: "$:/S", text: "x"},
+				{title: "C", text: "x", "code-body": "yes"},
+				{title: "H", text: "x", "hide-body": "yes"},
+				{title: "N", text: "x", "code-body": "no", "hide-body": "no"}
+			]);
+			expect(findWidget(renderButton(wiki, "$:/S").root, "button")).toBe(null);
+			expect(findWidget(renderButton(wiki, "C").root, "button")).toBe(null);
+			expect(findWidget(renderButton(wiki, "H").root, "button")).toBe(null);
+			expect(findWidget(renderButton(wiki, "N").root, "button")).not.toBe(null);
+		});
 	});
 
 	describe("body filter", function() {
@@ -328,6 +341,23 @@ describe("outline widget", function() {
 			// Without outline state, other cascade entries work as before
 			expect(bodyFor(wiki, "F")).toBe("Special Body");
 			expect(bodyFor(wiki, "G")).toBe("$:/core/ui/ViewTemplate/body/default");
+		});
+
+		it("leaves system, code-body and hide-body tiddlers alone", function() {
+			var wiki = cascadeWiki([
+				{title: "$:/S", text: "x"},
+				{title: "C", text: "x", "code-body": "yes"},
+				{title: "H", text: "x", "hide-body": "yes"},
+				{title: "N", text: "x", "code-body": "no"},
+				{title: "$:/state/rimir/outline/on/$:/S", text: "yes"},
+				{title: "$:/state/rimir/outline/on/C", text: "yes"},
+				{title: "$:/state/rimir/outline/on/H", text: "yes"},
+				{title: "$:/state/rimir/outline/on/N", text: "yes"}
+			]);
+			expect(bodyFor(wiki, "$:/S")).not.toBe(BODY);
+			expect(bodyFor(wiki, "C")).not.toBe(BODY);
+			expect(bodyFor(wiki, "H")).not.toBe(BODY);
+			expect(bodyFor(wiki, "N")).toBe(BODY);
 		});
 
 		it("body template renders the outline widget", function() {

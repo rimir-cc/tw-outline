@@ -1,0 +1,15 @@
+title: $:/config/shortcuts/
+
+outline-up: Up
+outline-down: Down
+outline-move-up: alt-Up
+outline-move-down: alt-Down
+outline-indent: Tab
+outline-promote: shift-Tab
+outline-edit: shift-Enter
+outline-open: Enter
+outline-clear: Escape
+outline-save: ctrl-Enter
+outline-continue: Enter
+outline-newline: shift-Enter
+outline-cancel: Escape
