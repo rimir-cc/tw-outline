@@ -72,3 +72,22 @@ exports.promote = function(text, model, id) {
 	}
 	return {text: apply(text, edits), select: selectFor(u, edits)};
 };
+
+// Swap the unit's whole subtree with the adjacent sibling of the same class (heading vs non-heading)
+exports.move = function(text, model, id, dir) {
+	var u = model.units[id];
+	if(!u || (dir !== -1 && dir !== 1)) { return null; }
+	var sibs = u.parent === -1 ? model.roots : model.units[u.parent].children,
+		i = sibs.indexOf(id), n = sibs[i + dir];
+	if(i < 0 || n === undefined) { return null; }
+	var o = model.units[n];
+	if((o.kind === "heading") !== (u.kind === "heading")) { return null; }
+	var a = dir < 0 ? o : u, b = dir < 0 ? u : o,
+		A = text.substring(a.start, a.subtreeEnd),
+		sep = text.substring(a.subtreeEnd, b.start),
+		B = text.substring(b.start, b.subtreeEnd);
+	return {
+		text: text.substring(0, a.start) + B + sep + A + text.substring(b.subtreeEnd),
+		select: dir < 0 ? a.start : a.start + B.length + sep.length
+	};
+};

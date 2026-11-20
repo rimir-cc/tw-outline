@@ -185,7 +185,9 @@ suffix of `before` that follows the largest end.
 */
 exports.assertOnlyRangesChanged = function(before, after, ranges, expect) {
 	// `expect` must be passed from the spec: Jasmine's global is not visible inside TW modules
-	expect = expect || (typeof globalThis !== "undefined" && globalThis.expect);
+	if(typeof expect !== "function") {
+		throw new Error("assertOnlyRangesChanged: the expect argument is required");
+	}
 	var min = Infinity, max = -Infinity;
 	(ranges || []).forEach(function(r) {
 		if(r[0] < min) { min = r[0]; }
