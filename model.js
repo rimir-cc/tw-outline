@@ -162,6 +162,9 @@ exports.buildModel = function(wiki, text, title) {
 			unit = addUnit(node, "list", parent);
 			extendParent(unit);
 			walkItems(node, unit.id);
+			// The list node ends at its last top-level item, without that item's nested items:
+			// the list's own range is its full extent
+			unit.end = unit.subtreeEnd;
 			extendParent(unit);
 			return;
 		}

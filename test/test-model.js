@@ -33,10 +33,24 @@ describe("outline model", function() {
 		expect(m.units[1].children).toEqual([2]);
 		expect(m.units[0].children).toEqual([1, 3]);
 		expect(m.units[0].subtreeEnd).toBe(12);
+		expect(m.units[0].end).toBe(12);
 		expect(m.units[3].subtreeEnd).toBe(12);
 		expect(m.roots).toEqual([0]);
 		expect(m.units[1].tag).toBe("li");
 		expect(m.units[0].tag).toBe("ul");
+	});
+
+	it("list range covers nested items of its last item", function() {
+		var m = build("* x\n** y");
+		expect(m.units[0].end).toBe(8);
+		expect(m.units[0].end).toBe(m.units[0].subtreeEnd);
+		m = build("; t\n: d\n;; u");
+		expect(m.units[0].kind).toBe("list");
+		expect(src(m, m.units[0])).toBe("; t\n: d\n;; u");
+		expect(m.units[0].end).toBe(m.units[0].subtreeEnd);
+		m = build("! H\n\n* x\n** y\n\n! I");
+		expect(src(m, m.units[1])).toBe("* x\n** y");
+		expect(m.units[1].end).toBe(m.units[1].subtreeEnd);
 	});
 
 	it("headings with sections", function() {
