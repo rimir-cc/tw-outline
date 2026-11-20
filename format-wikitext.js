@@ -114,7 +114,7 @@ exports.insertNew = function(text, model, id, newSource) {
 		insert = nl + nl + newSource;
 		select = pos + 2 * nl.length;
 		var rest = text.substring(pos);
-		if(rest && !/^\r?\n[ \t]*\r?\n/.test(rest)) { insert += nl; }
+		if(/\S/.test(rest) && !/^\r?\n[ \t]*\r?\n/.test(rest)) { insert += nl; }
 	}
 	return {text: utils.splice(text, pos, pos, insert), select: select};
 };

@@ -86,13 +86,30 @@ describe("outline edit", function() {
 		expect(fmt.insertNew(text, m, 0, "  \n ")).toBeNull();
 	});
 
+	it("heading new paragraph keeps trailing newline count", function() {
+		var text = "! H\n", m = build(text), r = fmt.insertNew(text, m, 0, "x");
+		expect(r.text).toBe("! H\n\nx\n");
+	});
+
 	it("isMultiline", function() {
-		var t = "|a|b|\n\n```\nx\n```\n\n* a\n\n* m\"\"\"l1\nl2\"\"\"",
+		var t = "|a|b|\n\n```\nx\n```\n\n* a\n\n<$list filter=\"[all[]]\"/>\n\n<div>\n\npara\n\n</div>\n\npa\nrb",
 			m = build(t);
-		expect(fmt.isMultiline(m, unit(m, function(u) { return u.tag === "table"; }).id)).toBe(true);
-		expect(fmt.isMultiline(m, unit(m, function(u) { return u.tag === "codeblock"; }).id)).toBe(true);
+		function find(tag, kind) {
+			var u = unit(m, function(u) { return (tag && u.tag === tag) || (kind && u.kind === kind); });
+			expect(u).toBeDefined();
+			return u.id;
+		}
+		expect(fmt.isMultiline(m, find("table"))).toBe(true);
+		expect(fmt.isMultiline(m, find("codeblock"))).toBe(true);
+		expect(fmt.isMultiline(m, find(null, "widget"))).toBe(true);
+		expect(fmt.isMultiline(m, find(null, "container"))).toBe(true);
 		expect(fmt.isMultiline(m, idOf(m, "* a"))).toBe(false);
-		var multi = unit(m, function(u) { return u.kind === "item" && /l1/.test(m.text.substring(u.start, u.end)); });
-		if(multi) { expect(fmt.isMultiline(m, multi.id)).toBe(true); }
+		var para = unit(m, function(u) { return m.text.substring(u.start, u.end) === "pa\nrb"; });
+		expect(para).toBeDefined();
+		expect(fmt.isMultiline(m, para.id)).toBe(true);
+		var m2 = build(fixtures.NOTES.specialItems),
+			multi = unit(m2, function(u) { return u.kind === "item" && /^\* """multi/.test(m2.text.substring(u.start, u.end)); });
+		expect(multi).toBeDefined();
+		expect(fmt.isMultiline(m2, multi.id)).toBe(true);
 	});
 });
