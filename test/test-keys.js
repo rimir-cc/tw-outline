@@ -228,6 +228,19 @@ describe("outline selection and keys", function() {
 		expect(wiki.getTiddler("T")).toBe(before);
 	});
 
+	it("identical result text does not write but the frame follows", function() {
+		var wiki = makeWiki([{title: "T", text: "* a\n* a"}]),
+			r = renderOutline(wiki, "T"),
+			before = wiki.getTiddler("T");
+		r.widget.select(2);
+		expect(key(r, KEYS.up, {alt: true}).prevented).toBe(true);
+		expect(wiki.getTiddler("T")).toBe(before);
+		expect(wiki.getTiddler(SEL + "T").fields.start).toBe("0");
+		r.refresh();
+		expect(selectedUnit(r).kind).toBe("item");
+		expect(selectedUnit(r).start).toBe(0);
+	});
+
 	it("read-only allows selection only", function() {
 		var wiki = makeWiki([{title: "T", text: "* a\n* b"}, {title: "$:/status/IsReadOnly", text: "yes"}]),
 			r = renderOutline(wiki, "T"),

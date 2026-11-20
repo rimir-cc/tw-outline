@@ -195,7 +195,7 @@ methods.operate = function(name, arg) {
 
 /*
 Write the adapter result {text, select} to the tiddler (once) and save the selection at the new start.
-null (no-op) writes nothing.
+null (no-op) writes nothing; a result whose text equals the current text only saves the selection.
 */
 methods.applyResult = function(result) {
 	if(!result) {
@@ -204,7 +204,10 @@ methods.applyResult = function(result) {
 	var old = this.wiki.getTiddler(this.tiddlerTitle),
 		id = this.selectedId,
 		kind = id === -1 ? "" : this.units[id].unit.kind;
-	this.wiki.addTiddler(new $tw.Tiddler(old, {text: result.text}, this.wiki.getModificationFields()));
+	// Same text (e.g. two identical siblings swapped): no write, but the frame still follows result.select
+	if(!old || result.text !== (old.fields.text || "")) {
+		this.wiki.addTiddler(new $tw.Tiddler(old, {text: result.text}, this.wiki.getModificationFields()));
+	}
 	this.saveSelection(result.select, id === -1 ? 0 : id, kind);
 	return true;
 };
