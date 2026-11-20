@@ -12,6 +12,7 @@ After render and refresh:
   widget.model      - buildModel() of the tiddler text
   widget.units      - [{unit, domNodes:[Element]}] in model order
   widget.selectedId - selected unit id or -1 (selection and keys: outline-keys.js)
+  widget.editor     - open in-place editor or null (outline-editor.js); re-attached after each mapping
 
 Matching rule (unit <-> widget): a widget matches a unit when its parseTreeNode.start equals the
 unit's anchor (the unit start; for $$$ typed blocks the start of the line after the $$$ header,
@@ -24,12 +25,15 @@ trailing line breaks and extends lists to their subtree end.
 
 var Widget = require("$:/core/modules/widgets/widget.js").widget,
 	buildModel = require("$:/plugins/rimir/outline/model.js").buildModel,
-	keys = require("$:/plugins/rimir/outline/outline-keys.js");
+	keys = require("$:/plugins/rimir/outline/outline-keys.js"),
+	editor = require("$:/plugins/rimir/outline/outline-editor.js");
 
 var MARKER_TIDDLER = "$:/plugins/rimir/outline/ui/transclusion-marker",
 	LIST_TAGS = {ul: true, ol: true, dl: true, blockquote: true},
 	// Kinds whose widgets may contain further units
-	DESCEND_KINDS = {list: true, item: true, container: true};
+	DESCEND_KINDS = {list: true, item: true, container: true},
+	// A <span> directly inside these is invalid HTML: the marker goes into their first cell/item
+	MARKER_INTO = {ul: "li", ol: "li", dl: "dt dd", table: "td th"};
 
 var OutlineWidget = function(parseTreeNode, options) {
 	this.initialise(parseTreeNode, options);
@@ -39,6 +43,8 @@ OutlineWidget.prototype = new Widget();
 
 // Selection, keys and structural operations: select, step, operate, applyResult, handleKeydown, handleClick
 keys.install(OutlineWidget.prototype);
+// In-place editor: startEdit, saveEdit, cancelEdit, reattachEditor, handleEditorKeydown, openTarget
+editor.install(OutlineWidget.prototype);
 
 OutlineWidget.prototype.render = function(parent, nextSibling) {
 	this.parentDomNode = parent;
@@ -64,6 +70,9 @@ OutlineWidget.prototype.execute = function() {
 	this.markers = [];
 	this.selectedId = -1;
 	this.selectedNodes = [];
+	this.editor = null;
+	this.pendingContinue = null;
+	this.markerHtml = null;
 	this.makeChildWidgets();
 };
 
@@ -73,13 +82,27 @@ OutlineWidget.prototype.refresh = function(changedTiddlers) {
 		this.refreshSelf();
 		return true;
 	}
+	if(changedTiddlers[MARKER_TIDDLER]) {
+		this.markerHtml = null;
+	}
 	var refreshed = this.refreshChildren(changedTiddlers);
+	if(this.editor && this.editor.widget) {
+		this.editor.widget.refresh(changedTiddlers);
+	}
 	if(refreshed || changedTiddlers[this.tiddlerTitle]) {
 		this.mapUnits();
 	} else if(changedTiddlers[this.selectionTitle()]) {
 		this.restoreSelection();
 	}
 	return refreshed;
+};
+
+// Remove the editor (it is not part of the children); the buffer stays
+OutlineWidget.prototype.destroy = function(options) {
+	if(this.editor) {
+		this.closeEditor();
+	}
+	Widget.prototype.destroy.call(this, options);
 };
 
 /*
@@ -117,6 +140,7 @@ OutlineWidget.prototype.mapUnits = function() {
 		self.stamp(entry);
 	});
 	this.restoreSelection();
+	this.reattachEditor();
 };
 
 // Remove stamps and markers of the previous mapping (DOM nodes that were not re-rendered keep them otherwise)
@@ -152,10 +176,38 @@ OutlineWidget.prototype.addMarker = function(node, target) {
 	var marker = this.document.createElement("span");
 	marker.className = "rr-ol-tmark";
 	marker.setAttribute("title", target);
-	marker.innerHTML = this.wiki.renderTiddler("text/html", MARKER_TIDDLER, {parseAsInline: true});
-	node.appendChild(marker);
+	marker.setAttribute("data-ol-target", target);
+	if(this.markerHtml === null) {
+		this.markerHtml = this.wiki.renderTiddler("text/html", MARKER_TIDDLER, {parseAsInline: true});
+	}
+	marker.innerHTML = this.markerHtml;
+	markerParent(node).appendChild(marker);
 	this.markers.push(marker);
 };
+
+// The element that takes the marker: the node itself, or for lists and tables their first item/cell
+function markerParent(node) {
+	var into = MARKER_INTO[(node.tagName || "").toLowerCase()];
+	return (into && firstDescendant(node, into.split(" "))) || node;
+}
+
+function firstDescendant(node, tags) {
+	var children = node.childNodes || [];
+	for(var i = 0; i < children.length; i++) {
+		var child = children[i];
+		if(child.nodeType !== 1) {
+			continue;
+		}
+		if(tags.indexOf((child.tagName || "").toLowerCase()) !== -1) {
+			return child;
+		}
+		var found = firstDescendant(child, tags);
+		if(found) {
+			return found;
+		}
+	}
+	return null;
+}
 
 /*
 Walk the widget tree below the body transclusion of the tiddler and return {unitId: [Element]}.

@@ -15,7 +15,8 @@ be selected.
 \*/
 "use strict";
 
-var formats = require("$:/plugins/rimir/outline/formats.js");
+var formats = require("$:/plugins/rimir/outline/formats.js"),
+	isInside = require("$:/plugins/rimir/outline/outline-editor.js").isInside;
 
 var SELECTION_PREFIX = "$:/temp/rimir/outline/selection/",
 	READ_ONLY = "$:/status/IsReadOnly",
@@ -31,6 +32,7 @@ var ACTIONS = [
 	{name: "outline-down", run: function(w) { return w.step(1); }},
 	{name: "outline-clear", run: function(w) { return w.clearSelection(); }},
 	{name: "outline-open", run: function(w) { return w.openTransclusion(); }},
+	{name: "outline-edit", run: function(w) { return w.editSelected(); }},
 	{name: "outline-move-up", run: function(w) { return w.operate("move", -1); }},
 	{name: "outline-move-down", run: function(w) { return w.operate("move", 1); }},
 	{name: "outline-indent", run: function(w) { return w.operate("indent"); }},
@@ -160,10 +162,14 @@ methods.lastSelectable = function() {
 
 /* ---------- operations ---------- */
 
-// Stub until the transclusion jump is implemented: consumes Enter on transclusion units only
+// Enter on a transclusion unit: open the transcluded tiddler in outline mode (openTarget: outline-editor.js)
 methods.openTransclusion = function() {
 	var id = this.selectedId;
-	return id !== -1 && this.units[id].unit.kind === "transclusion";
+	if(id === -1 || this.units[id].unit.kind !== "transclusion") {
+		return false;
+	}
+	this.openTarget(this.units[id].unit.target);
+	return true;
 };
 
 /*
@@ -238,9 +244,23 @@ methods.keyMatches = function(event, name) {
 	return !!km && km.checkKeyDescriptors(event, km.parseKeyDescriptors("((" + name + "))", {wiki: this.wiki}));
 };
 
-// Click on a stamped element selects its unit and focuses the container
+/*
+Click on a transclusion marker opens its target. Click on a stamped element selects its unit and focuses
+the container. Clicks inside the editor host are left to the editor.
+*/
 methods.handleClick = function(event) {
 	var node = event.target;
+	if(this.editor && this.editor.host && isInside(node, this.editor.host)) {
+		return;
+	}
+	for(var m = node; m && m !== this.domNode; m = m.parentNode) {
+		if(m.getAttribute && m.getAttribute("data-ol-target")) {
+			event.preventDefault();
+			event.stopPropagation();
+			this.openTarget(m.getAttribute("data-ol-target"));
+			return;
+		}
+	}
 	while(node && node !== this.domNode) {
 		if(node.getAttribute && node.getAttribute("data-ol-id") !== null && node.getAttribute("data-ol-id") !== undefined) {
 			if(this.select(parseInt(node.getAttribute("data-ol-id"), 10)) && !isEditable(event.target)) {

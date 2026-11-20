@@ -113,6 +113,9 @@ describe("outline widget", function() {
 		});
 		expect(marks.length).toBe(1);
 		expect(marks[0].attributes.title).toBe("X");
+		// A <span> directly in a <ul> is invalid HTML: the marker goes into the first item
+		expect(marks[0].parentNode.tag).toBe("li");
+		expect(marks[0].parentNode.parentNode).toBe(trans.domNodes[0]);
 		expect(outlineRoot(r.container).getAttribute("tabindex")).toBe("0");
 	});
 
@@ -239,6 +242,41 @@ describe("outline widget", function() {
 		});
 		expect(marks.length).toBe(1);
 		expect(r.widget.units[0].domNodes[0].textContent.indexOf("x two")).not.toBe(-1);
+	});
+
+	it("puts the marker into the first cell of a transcluded table", function() {
+		var wiki = makeWiki([
+			{title: "T", text: "{{X}}"},
+			{title: "X", text: "|a|b|\n|c|d|"}
+		]);
+		var r = renderOutline(wiki, "T"),
+			marks = elements(r.container).filter(function(el) {
+				return el.attributes["class"] === "rr-ol-tmark";
+			});
+		expect(r.widget.units[0].domNodes[0].tag).toBe("table");
+		expect(marks.length).toBe(1);
+		expect(marks[0].parentNode.tag).toBe("td");
+	});
+
+	it("renders the marker html once per widget", function() {
+		var wiki = makeWiki([
+			{title: "T", text: "{{X}}\n\n{{Y}}"},
+			{title: "X", text: "x"},
+			{title: "Y", text: "y"}
+		]);
+		spyOn(wiki, "renderTiddler").and.callThrough();
+		var r = renderOutline(wiki, "T");
+		wiki.addTiddler({title: "X", text: "x two"});
+		r.root.refresh({"X": {modified: true}});
+		wiki.addTiddler({title: "T", text: "{{X}}\n\n{{Y}}\n\npara"});
+		r.root.refresh({"T": {modified: true}});
+		var markerRenders = wiki.renderTiddler.calls.allArgs().filter(function(args) {
+			return args[1] === "$:/plugins/rimir/outline/ui/transclusion-marker";
+		});
+		expect(markerRenders.length).toBe(1);
+		expect(elements(r.container).filter(function(el) {
+			return el.attributes["class"] === "rr-ol-tmark";
+		}).length).toBe(2);
 	});
 
 	describe("toolbar button", function() {

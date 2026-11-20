@@ -44,3 +44,20 @@ tags: $:/tags/Stylesheet
 .rr-ol-tmark:hover svg {
 	fill: <<colour primary>>;
 }
+
+/* In-place editor: sits where the edited unit was (or after the anchor of a new unit) */
+.rr-ol-editor-host {
+	margin: 0.2em 0;
+}
+
+.rr-ol-editor-host .tc-editor-toolbar {
+	margin-bottom: 0.2em;
+}
+
+.rr-ol-conflict {
+	margin-bottom: 0.3em;
+	padding: 0.3em 0.6em;
+	border-left: 3px solid <<colour alert-highlight>>;
+	background: <<colour alert-background>>;
+	color: <<colour alert-foreground>>;
+}
