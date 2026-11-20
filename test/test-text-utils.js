@@ -1,0 +1,46 @@
+/*\
+title: $:/plugins/rimir/outline/test/test-text-utils.js
+type: application/javascript
+tags: [[$:/tags/test-spec]]
+
+Tests for text-utils.js (line endings, splice, line start, relocation).
+
+\*/
+"use strict";
+
+var tu = require("$:/plugins/rimir/outline/text-utils.js");
+
+describe("outline text-utils", function() {
+
+	it("eol detects CRLF, LF and defaults to LF", function() {
+		expect(tu.eol("a\r\nb\n")).toBe("\r\n");
+		expect(tu.eol("a\nb\r\n")).toBe("\n");
+		expect(tu.eol("abc")).toBe("\n");
+	});
+
+	it("splice replaces and round-trips", function() {
+		var text = "hello world";
+		expect(tu.splice(text, 6, 11, "there")).toBe("hello there");
+		expect(tu.splice(text, 5, 5, "!")).toBe("hello! world");
+		var out = tu.splice(text, 0, 5, "bye");
+		expect(tu.splice(out, 0, 3, "hello")).toBe(text);
+	});
+
+	it("lineStart finds the start of the line", function() {
+		var text = "ab\ncd\r\nef";
+		expect(tu.lineStart(text, 0)).toBe(0);
+		expect(tu.lineStart(text, 2)).toBe(0);
+		expect(tu.lineStart(text, 4)).toBe(3);
+		expect(tu.lineStart(text, 8)).toBe(7);
+	});
+
+	it("relocate returns the index of a unique occurrence", function() {
+		expect(tu.relocate("xx* a\nyy", "* a")).toBe(2);
+	});
+
+	it("relocate returns -1 for zero and two occurrences", function() {
+		expect(tu.relocate("abc", "zz")).toBe(-1);
+		expect(tu.relocate("* a\n* a", "* a")).toBe(-1);
+		expect(tu.relocate("abc", "")).toBe(-1);
+	});
+});
