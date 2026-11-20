@@ -32,6 +32,10 @@ describe("outline text-utils", function() {
 		expect(tu.lineStart(text, 2)).toBe(0);
 		expect(tu.lineStart(text, 4)).toBe(3);
 		expect(tu.lineStart(text, 8)).toBe(7);
+		expect(tu.lineStart("\nabc", 0)).toBe(0);
+		expect(tu.lineStart("ab\ncd", 2)).toBe(0);
+		expect(tu.lineStart("ab\ncd", 5)).toBe(3);
+		expect(tu.lineStart("ab\n", 3)).toBe(3);
 	});
 
 	it("relocate returns the index of a unique occurrence", function() {

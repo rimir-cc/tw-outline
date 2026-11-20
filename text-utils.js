@@ -20,6 +20,9 @@ exports.splice = function(text, start, end, insert) {
 
 // Index of the first character of the line containing pos
 exports.lineStart = function(text, pos) {
+	if(pos <= 0) {
+		return 0;
+	}
 	return text.lastIndexOf("\n", pos - 1) + 1;
 };
 
