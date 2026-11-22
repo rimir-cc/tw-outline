@@ -3,7 +3,7 @@ code-body: yes
 
 <$let ol-help={{{ [<currentTiddler>addprefix[$:/temp/rimir/outline/help/]] }}}>
 
-<div class="rr-ol-frame">
+<div class={{{ rr-ol-frame [{$:/config/rimir/outline/badges}match[all]then[rr-ol-badges rr-ol-badges-all]] [{$:/config/rimir/outline/badges}match[headings]then[rr-ol-badges rr-ol-badges-headings]] +[join[ ]] }}}>
 
 <$transclude $tiddler="$:/plugins/rimir/outline/ui/help-bar" $mode="inline"/>
 

@@ -38,6 +38,18 @@ type: text/vnd.tiddlywiki
 
 All are `$:/config/shortcuts/<name>`; descriptions are in `$:/config/ShortcutInfo/<name>`. Change them in the settings tab (the core shortcut editor, press the key to record it, platform variants included) or in ControlPanel > Keyboard Shortcuts.
 
+!! Type badges
+
+|!`data-ol-type` |!Unit |
+|`paragraph`, `code-block`, `table`, `quote`, `rule` |Blocks (`p`, `pre`, `table`, `blockquote`, `hr`; other blocks: their tag name) |
+|`h1` … `h6` |Headings |
+|`bullet`, `numbered`, `term`, `definition`, `quote` |List items (by their list: `ul`, `ol`, `dt`/`dd`, `blockquote`) |
+|`bullet-list`, `numbered-list`, `definitions`, `quote` |Whole lists (badge in the left margin) |
+|`transclusion`, `widget` |Transclusion lines, widgets and macro calls |
+|tag name (`div`, ...) |Opened HTML containers (badge in the left margin) |
+
+The widget sets `data-ol-type` on each unit's first DOM node (`unitType` in `dom-utils.js`); CSS shows it as `::after`, absolutely positioned, so the layout does not change. The editor field gets the type of the unit it edits, of the chosen block type, or of its anchor (a new item); an item edited inside its `li` keeps the `li`'s badge.
+
 !! Key overview
 
 The //keys// tab and the overlay (`?` in an outline, or the small ? button at its top right) show the same table, `$:/plugins/rimir/outline/ui/keys-table`, with the keys read live from the config. Its groups are the tiddlers listed in `$:/plugins/rimir/outline/key-groups`: each has a `caption`, an optional `hint`, a `list` of shortcut names and, optionally, text shown after the keys (the fixed block menu keys). The settings tab uses the same groups.
@@ -79,6 +91,7 @@ Swap the unit's whole subtree with the adjacent sibling's whole subtree, blank-l
 |!Tiddler |!Purpose |
 |`$:/state/rimir/outline/on/<title>` |Outline mode on (`yes`) / off |
 |`$:/temp/rimir/outline/...` |Editor buffer, selection and open key overview (`help/<title>`) while active |
+|`$:/config/rimir/outline/badges` |Type badges: `all` (default), `headings` (h1–h6 only) or `off`. Sets class `rr-ol-badges-<mode>` on the frame; the badge text is the unit's `data-ol-type` |
 |`$:/config/rimir/outline/full-editor` |`yes`: full text editor with toolbar; otherwise (default `no`) the compact one-line editor |
 
 </$fill>

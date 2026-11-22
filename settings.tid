@@ -13,6 +13,10 @@ Select, edit, move and indent the blocks of a wikitext tiddler in place. See the
 <$transclude $variable="rr-settings-row" label="Full editor" hint="Off (default): Enter opens a compact one-line field that grows with its text. On: the full text editor with toolbar."><$fill $name="body"><$macrocall $name="rr-config-checkbox" tid="$:/config/rimir/outline/full-editor" label="Use the full editor with toolbar"/></$fill></$transclude>
 </$fill></$transclude>
 
+<$transclude $variable="rr-settings-section" title="Display"><$fill $name="body">
+<$transclude $variable="rr-settings-row" label="Type badges" hint="Small labels next to the units while outline mode is on, in selection and edit mode: all (default) shows every unit's type (paragraph, h2, code-block, bullet, ...), headings only h1 to h6. They take no space and are not part of the text."><$fill $name="body"><$select tiddler="$:/config/rimir/outline/badges" default="all" class="rr-config-select"><option value="all">all</option><option value="headings">headings only</option><option value="off">off</option></$select></$fill></$transclude>
+</$fill></$transclude>
+
 <$transclude $variable="rr-settings-section" title="Keyboard shortcuts" hint="The editor of ControlPanel > Keyboard Shortcuts, for the outline keys only: open a row, then the pencil of a platform to add a key by pressing it or to remove one. Changes apply at once. Press ? in an outline (or see the keys tab) for the overview."><$fill $name="body">
 <$list filter="[list[$:/plugins/rimir/outline/key-groups]has[list]]" variable="group">
 <$transclude $variable="rr-settings-subsection" title={{{ [<group>get[caption]] }}}><$fill $name="body">

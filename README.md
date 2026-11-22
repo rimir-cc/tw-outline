@@ -7,6 +7,7 @@ Work on an ordinary tiddler like on a Streams outline: select a block, edit it i
 - **Toggle per tiddler** - an *outline* button in the view toolbar. Off means the normal view.
 - **Same rendering** - the tiddler renders exactly as usual; outline mode only adds data attributes, a selection frame and key handling.
 - **Units** - list items, lists, headings (with sections), paragraphs, code blocks, tables, opened HTML containers, transclusion lines, and widgets or macro calls (one opaque unit each).
+- **Type badges** - a small, faint label next to every unit shows what it is (paragraph, h2, code-block, bullet, ...), also on the editor field; they take no space. Settings: all (default), headings only, off.
 - **Selection** - click, Up/Down, Left/Right to the parent / first child, Escape clears.
 - **Move** - Alt-Up/Alt-Down swap a unit with its sibling, subtree included. Moves stay inside the parent.
 - **Indent** - Tab/Shift-Tab demote/promote list items and headings with their subtrees.

@@ -266,12 +266,36 @@ methods.lastSectionNode = function(id) {
 	return nodes.length ? nodes[nodes.length - 1] : null;
 };
 
+/*
+Badge type of the editor field: the edited unit's type, a new block's chosen type, a new item like its anchor,
+other new units a paragraph. None for an item edited inside its li (the li keeps its own badge).
+*/
+methods.editorType = function() {
+	var ed = this.editor,
+		anchor = ed.id !== -1 && this.units[ed.id] && this.units[ed.id].domNodes[0],
+		anchorType = anchor && anchor.getAttribute ? anchor.getAttribute("data-ol-type") : "";
+	if(ed.placement === "inside") {
+		return "";
+	}
+	if(!ed.isNew) {
+		return anchorType || "";
+	}
+	if(ed.blockType) {
+		return dom.newBlockType(ed.blockType);
+	}
+	return ed.kind === "item" ? anchorType || "bullet" : "paragraph";
+};
+
 methods.placeEditor = function(focus) {
 	var ed = this.editor,
 		nodes = ed.id === -1 ? [] : this.editAnchorNodes(),
 		host = this.document.createElement(ed.placement === "after" && ed.unitKind === "item" && nodes.length ? "li" : "div"),
 		self = this;
 	host.className = HOST_CLASS;
+	var type = this.editorType();
+	if(type) {
+		host.setAttribute("data-ol-type", type);
+	}
 	// While an editor is open the field marks the place: no selection frames (they would stay on the saved unit)
 	dom.setClass(this.domNode, IS_EDITING_CLASS, true);
 	if(!nodes.length) {

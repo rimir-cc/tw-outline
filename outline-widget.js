@@ -27,7 +27,8 @@ var Widget = require("$:/core/modules/widgets/widget.js").widget,
 	buildModel = require("$:/plugins/rimir/outline/model.js").buildModel,
 	keys = require("$:/plugins/rimir/outline/outline-keys.js"),
 	editor = require("$:/plugins/rimir/outline/outline-editor.js"),
-	menu = require("$:/plugins/rimir/outline/outline-menu.js");
+	menu = require("$:/plugins/rimir/outline/outline-menu.js"),
+	dom = require("$:/plugins/rimir/outline/dom-utils.js");
 
 var MARKER_TIDDLER = "$:/plugins/rimir/outline/ui/transclusion-marker",
 	LIST_TAGS = {ul: true, ol: true, dl: true, blockquote: true},
@@ -173,6 +174,7 @@ OutlineWidget.prototype.clearStamps = function() {
 			node.removeAttribute("data-ol-id");
 			node.removeAttribute("data-ol-kind");
 			node.removeAttribute("data-ol-start");
+			node.removeAttribute("data-ol-type");
 		});
 	});
 	$tw.utils.each(this.markers, function(marker) {
@@ -190,6 +192,10 @@ OutlineWidget.prototype.stamp = function(entry) {
 		node.setAttribute("data-ol-kind", unit.kind);
 		node.setAttribute("data-ol-start", unit.start);
 	});
+	// The type badge (CSS, when on) goes on the first node only
+	if(entry.domNodes.length) {
+		entry.domNodes[0].setAttribute("data-ol-type", dom.unitType(unit.kind, entry.domNodes[0]));
+	}
 	if(unit.kind === "transclusion" && entry.domNodes.length) {
 		this.addMarker(entry.domNodes[0], unit.target);
 	}

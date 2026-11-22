@@ -253,3 +253,70 @@ td.rr-ol-keys-key {
 	font-size: 0.85em;
 	color: <<colour muted-foreground>>;
 }
+
+/* Type badges ($:/config/rimir/outline/badges: all, headings, off). The text is the unit's data-ol-type (set by
+   the widget; the editor field carries the type of what it edits). Absolutely positioned, so no unit and no editor
+   field moves or grows: they sit in a column reserved on the right of the outline (padding), each at the top of its
+   unit; a whole list or container a line above it (its first item has the badge beside it); code blocks inside
+   their top right corner (they clip overflow). */
+.rr-ol-badges-all .rr-ol {
+	padding-right: 6.5em;
+}
+
+.rr-ol-badges-headings .rr-ol {
+	padding-right: 2.5em;
+}
+
+.rr-ol-badges-all [data-ol-type],
+.rr-ol-badges-headings [data-ol-kind="heading"],
+.rr-ol-badges-headings .rr-ol-editor-host[data-ol-type^="h"] {
+	position: relative;
+}
+
+.rr-ol-badges-all [data-ol-type]::after,
+.rr-ol-badges-headings [data-ol-kind="heading"]::after,
+.rr-ol-badges-headings .rr-ol-editor-host[data-ol-type^="h"]::after {
+	content: attr(data-ol-type);
+	/* Not read out by screen readers (browsers without alt text keep the line above) */
+	content: attr(data-ol-type) / "";
+	position: absolute;
+	top: 0;
+	left: 100%;
+	margin-left: 8px;
+	padding: 0 4px;
+	border: 1px solid <<colour tiddler-border>>;
+	border-radius: 3px;
+	font-family: sans-serif;
+	font-size: 9px;
+	font-weight: normal;
+	font-style: normal;
+	line-height: 13px;
+	letter-spacing: 0;
+	text-transform: none;
+	text-indent: 0;
+	white-space: nowrap;
+	color: <<colour muted-foreground>>;
+	background: <<colour tiddler-background>>;
+	opacity: 0.7;
+	pointer-events: none;
+	/* Stays visible in an edited list item (its own content is hidden) */
+	visibility: visible;
+}
+
+.rr-ol-badges-all [data-ol-kind="list"]::after,
+.rr-ol-badges-all [data-ol-kind="container"]::after {
+	top: -15px;
+}
+
+/* A quote's lines carry the badge, the quote as a whole does not repeat it */
+.rr-ol-badges-all [data-ol-kind="list"][data-ol-type="quote"]::after {
+	content: none;
+}
+
+.rr-ol-badges-all pre[data-ol-type]::after,
+.rr-ol-badges-all .rr-ol-editor-host[data-ol-type="code-block"]::after {
+	left: auto;
+	right: 3px;
+	top: 3px;
+	margin-left: 0;
+}
