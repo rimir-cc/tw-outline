@@ -1,0 +1,4 @@
+title: $:/plugins/rimir/outline/key-groups/navigate
+caption: Navigate
+hint: In selection mode: click a block, or focus the outline
+list: outline-up outline-down outline-up-deep outline-down-deep outline-parent outline-child outline-clear

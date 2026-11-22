@@ -1,8 +1,18 @@
 title: $:/plugins/rimir/outline/ui/body
 code-body: yes
 
+<$let ol-help={{{ [<currentTiddler>addprefix[$:/temp/rimir/outline/help/]] }}}>
+
+<div class="rr-ol-frame">
+
+<$transclude $tiddler="$:/plugins/rimir/outline/ui/help-bar" $mode="inline"/>
+
 <$outline tiddler=<<currentTiddler>>>
 
 <$transclude $tiddler=<<currentTiddler>> $mode="block"/>
 
 </$outline>
+
+</div>
+
+</$let>

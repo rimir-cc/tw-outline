@@ -1,0 +1,23 @@
+title: $:/plugins/rimir/outline/ui/help-bar
+description: The ? button and, while $:/temp/rimir/outline/help/<title> is yes, the key overview of an outline. Transcluded inline by ui/body (variable ol-help: that temp tiddler), outside the $outline widget.
+
+\whitespace trim
+<div class="rr-ol-help-bar">
+<$button class="tc-btn-invisible rr-ol-help-button" tooltip="Keys (?)" aria-label="Keys">
+<%if [<ol-help>get[text]match[yes]] %>
+<$action-deletetiddler $tiddler=<<ol-help>>/>
+<%else%>
+<$action-setfield $tiddler=<<ol-help>> text="yes"/>
+<%endif%>
+?
+</$button>
+<%if [<ol-help>get[text]match[yes]] %>
+<div class="rr-ol-help">
+<$button class="tc-btn-invisible rr-ol-help-close" tooltip="Close (Escape)" aria-label="Close">
+<$action-deletetiddler $tiddler=<<ol-help>>/>
+{{$:/core/images/close-button}}
+</$button>
+<$transclude $tiddler="$:/plugins/rimir/outline/ui/keys-table" $mode="block"/>
+</div>
+<%endif%>
+</div>

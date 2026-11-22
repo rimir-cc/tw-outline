@@ -12,6 +12,9 @@ After a re-render the unit with the saved start is selected again (same kind pre
 and its first item share a start). Otherwise the saved index, clamped. Units without DOM nodes cannot
 be selected. A list item with sub-items is framed around its own lines only (drawSelectionBox).
 
+Key overview: toggleHelp sets/deletes $:/temp/rimir/outline/help/<title>; ui/body shows ui/keys-table while it is
+"yes". Escape closes it before it clears the selection.
+
 \*/
 "use strict";
 
@@ -26,6 +29,7 @@ var formats = require("$:/plugins/rimir/outline/formats.js"),
 	scrollIntoView = dom.scrollIntoView;
 
 var SELECTION_PREFIX = "$:/temp/rimir/outline/selection/",
+	HELP_PREFIX = "$:/temp/rimir/outline/help/",
 	READ_ONLY = "$:/status/IsReadOnly",
 	SELECTED_CLASS = "rr-ol-selected",
 	OWN_CLASS = "rr-ol-selected-own",
@@ -36,10 +40,14 @@ var SELECTION_PREFIX = "$:/temp/rimir/outline/selection/",
 Select-mode actions in matching order. run returns true when the key is consumed. Structural keys
 (operate) are consumed whenever a unit is selected, even when nothing changes or the wiki is read-only,
 so Tab never moves the focus away from a selection. In read-only wikis only up/down/clear/open act.
+`char` is a typed character that also triggers the action, whatever the keyboard layout ("?" is shift-slash only
+on US layouts).
 */
 var ACTIONS = [
 	{name: "outline-up", run: function(w) { return w.step(-1); }},
 	{name: "outline-down", run: function(w) { return w.step(1); }},
+	{name: "outline-up-deep", run: function(w) { return w.step(-1, true); }},
+	{name: "outline-down-deep", run: function(w) { return w.step(1, true); }},
 	{name: "outline-parent", run: function(w) { return w.stepTree(-1); }},
 	{name: "outline-child", run: function(w) { return w.stepTree(1); }},
 	{name: "outline-clear", run: function(w) { return w.clearSelection(); }},
@@ -49,7 +57,8 @@ var ACTIONS = [
 	{name: "outline-move-up", run: function(w) { return w.operate("move", -1); }},
 	{name: "outline-move-down", run: function(w) { return w.operate("move", 1); }},
 	{name: "outline-indent", run: function(w) { return w.operate("indent"); }},
-	{name: "outline-promote", run: function(w) { return w.operate("promote"); }}
+	{name: "outline-promote", run: function(w) { return w.operate("promote"); }},
+	{name: "outline-help", char: "?", run: function(w) { return w.toggleHelp(); }}
 ];
 
 var methods = {};
@@ -211,16 +220,24 @@ methods.restoreSelection = function() {
 };
 
 // Select the previous (-1) or next (1) selectable unit. Without a selection: the first or last one.
-methods.step = function(dir) {
+/*
+Up/Down. `deep` (Ctrl-Up/Down): every unit in document order. Otherwise a whole list counts as one block: Down from a
+selected list goes to the unit after it, and Up into a list from below selects the whole list (see outerList).
+*/
+methods.step = function(dir, deep) {
 	// Positions of an unrendered change are stale: remap first (selecting writes nothing)
 	this.ensureCurrent();
 	var id = this.selectedId, i;
 	if(id === -1) {
 		i = dir > 0 ? this.nearestSelectable(0) : this.lastSelectable();
 	} else {
-		for(i = id + dir; i >= 0 && i < this.units.length && !this.isSelectable(i); i += dir) {}
+		var skipEnd = !deep && dir > 0 && this.units[id].unit.kind === "list" ? this.units[id].unit.subtreeEnd : -1;
+		for(i = id + dir; i >= 0 && i < this.units.length &&
+			(!this.isSelectable(i) || this.units[i].unit.start < skipEnd); i += dir) {}
 		if(i < 0 || i >= this.units.length) {
 			i = id;
+		} else if(!deep && dir < 0) {
+			i = this.outerList(i, id);
 		}
 	}
 	if(i === -1) {
@@ -275,6 +292,20 @@ methods.treeChild = function(id) {
 		return -1;
 	}
 	return first(model.units[id].children);
+};
+
+// The outermost selectable list around unit `i` that does not contain unit `from`; else `i`
+methods.outerList = function(i, from) {
+	var model = this.model,
+		start = model.units[from].start,
+		result = i;
+	for(var p = model.units[i].parent; p !== -1; p = model.units[p].parent) {
+		var u = model.units[p];
+		if(u.kind === "list" && !(start >= u.start && start < u.subtreeEnd) && this.isSelectable(p)) {
+			result = p;
+		}
+	}
+	return result;
 };
 
 methods.lastSelectable = function() {
@@ -390,14 +421,49 @@ methods.handleKeydown = function(event) {
 		}
 		this.closeMenu();
 	}
+	// An open key overview closes with Escape before Escape clears the selection
+	if(event.keyCode === 27 && !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey && this.isHelpOpen()) {
+		this.toggleHelp(false);
+		event.preventDefault();
+		event.stopPropagation();
+		return;
+	}
 	for(var i = 0; i < ACTIONS.length; i++) {
 		var action = ACTIONS[i];
-		if(this.keyMatches(event, action.name) && action.run(this)) {
+		if((this.keyMatches(event, action.name) || typedChar(event, action.char)) && action.run(this)) {
 			event.preventDefault();
 			event.stopPropagation();
 			return;
 		}
 	}
+};
+
+function typedChar(event, ch) {
+	return !!ch && event.key === ch && !event.ctrlKey && !event.altKey && !event.metaKey;
+}
+
+/* ---------- key overview ---------- */
+
+// The overview (ui/keys-table) is shown by the body template while this temp tiddler is "yes"
+methods.helpTitle = function() {
+	return HELP_PREFIX + this.tiddlerTitle;
+};
+
+methods.isHelpOpen = function() {
+	return this.wiki.getTiddlerText(this.helpTitle()) === "yes";
+};
+
+// Open, close (open = true/false) or toggle the key overview. Always consumes the key.
+methods.toggleHelp = function(open) {
+	if(open === undefined) {
+		open = !this.isHelpOpen();
+	}
+	if(open) {
+		this.wiki.setText(this.helpTitle(), "text", null, "yes");
+	} else if(this.wiki.tiddlerExists(this.helpTitle())) {
+		this.wiki.deleteTiddler(this.helpTitle());
+	}
+	return true;
 };
 
 methods.keyMatches = function(event, name) {

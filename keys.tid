@@ -1,0 +1,6 @@
+title: $:/plugins/rimir/outline/keys
+caption: keys
+
+Keys of outline mode. Press <kbd>?</kbd> in an outline to show this overview next to it; change the keys in the settings tab.
+
+{{$:/plugins/rimir/outline/ui/keys-table}}

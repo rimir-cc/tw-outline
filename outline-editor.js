@@ -548,7 +548,9 @@ methods.reattachEditor = function() {
 		this.unhideEdited();
 		return;
 	}
-	var hadFocus = ed.focused;
+	// The focus moved elsewhere just before (its blur is decided a tick later, see noteBlur): do not take it back
+	var active = this.document.activeElement,
+		hadFocus = ed.focused && (!active || active === this.document.body || (!!ed.host && ed.host.contains(active)));
 	ed.caret = this.editorCaret();
 	this.unhideEdited();
 	this.removeHost();
@@ -715,8 +717,9 @@ methods.editStep = function(dir) {
 	}
 	// The save may not be rendered yet: remap now so the neighbour is found at its new position
 	this.ensureCurrent();
+	// Unit by unit (never the whole list): the editor goes into lists
 	if(!stay) {
-		this.step(dir);
+		this.step(dir, true);
 	}
 	this.editSelected();
 	return true;

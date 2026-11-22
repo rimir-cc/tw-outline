@@ -2,6 +2,8 @@ title: $:/config/shortcuts/
 
 outline-up: Up
 outline-down: Down
+outline-up-deep: ctrl-Up
+outline-down-deep: ctrl-Down
 outline-parent: Left
 outline-child: Right
 outline-move-up: alt-Up
@@ -18,3 +20,4 @@ outline-newline: shift-Enter
 outline-cancel: Escape
 outline-edit-up: ctrl-Up
 outline-edit-down: ctrl-Down
+outline-help: shift-slash

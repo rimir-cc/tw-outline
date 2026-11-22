@@ -16,7 +16,7 @@ type: text/vnd.tiddlywiki
 
 !! Approach
 
-The tiddler is rendered unchanged. A JS widget, `$outline`, wraps the normal body transclusion, walks the rendered widget tree and stamps `data-ol-*` attributes on the DOM node of each unit. One delegated `keydown` and `click` handler lives on the widget's container. Operations are splices of known text ranges. Wrapper elements inside the body are avoided on purpose: they would change the HTML and break CSS such as `ul > li`. The one exception is the widget's own container: while outline mode is on, the whole body sits inside `div.rr-ol`, so selectors such as `.tc-tiddler-body > p` no longer match (use `.tc-tiddler-body p` or also match `.tc-tiddler-body > .rr-ol > p`).
+The tiddler is rendered unchanged. A JS widget, `$outline`, wraps the normal body transclusion, walks the rendered widget tree and stamps `data-ol-*` attributes on the DOM node of each unit. One delegated `keydown` and `click` handler lives on the widget's container. Operations are splices of known text ranges. Wrapper elements inside the body are avoided on purpose: they would change the HTML and break CSS such as `ul > li`. The one exception is the widget's own container: while outline mode is on, the whole body sits inside `div.rr-ol-frame > div.rr-ol` (the frame also holds the key overview), so selectors such as `.tc-tiddler-body > p` no longer match (use `.tc-tiddler-body p` or also match `.tc-tiddler-body > .rr-ol-frame > .rr-ol > p`).
 
 !! Parts
 
@@ -26,16 +26,17 @@ The tiddler is rendered unchanged. A JS widget, `$outline`, wraps the normal bod
 |`formats.js` |Registry of format adapters |
 |`format-wikitext.js` |Wikitext adapter: indent, promote, move, replace, insertNew, remove, editSource, isMultiline |
 |`outline-widget.js` |The `$outline` widget: unit-to-DOM mapping, stamps, selection, writes |
-|`outline-keys.js` |Key dispatch through `$:/config/shortcuts/outline-*` |
+|`outline-keys.js` |Key dispatch through `$:/config/shortcuts/outline-*`; toggles the key overview |
+|`keys/*`, `ui/keys-table`, `keys.tid` |Key groups (caption, hint, list of shortcut names), the overview table, the keys tab |
 |`outline-editor.js` |In-place editor: temp tiddler, placeholder, save, continue, conflict handling |
 |`outline-menu.js` |Block menu (Shift-Enter): entries from the adapter, keyboard and mouse, runs insert / convert / edit |
 |`language/blocks.multids` |Labels of the block types and menu groups |
-|`ui/*` |Toolbar button and icon, body template and its filter, editor template, transclusion marker |
+|`ui/*` |Toolbar button and icon, body template and its filter, help bar (? button and overview), editor template, transclusion marker |
 |`styles.tid` |Selection frame and item box, compact editor, marker |
 
 !! Routing
 
-`ui/toolbar-button` toggles `$:/state/rimir/outline/on/<title>` (`yes`/`no`). `ui/body-filter` (a `$:/tags/ViewTemplateBodyFilter` entry) routes eligible tiddlers with state `yes` to `ui/body`, which renders `<$outline>` around the usual block transclusion.
+`ui/toolbar-button` toggles `$:/state/rimir/outline/on/<title>` (`yes`/`no`). `ui/body-filter` (a `$:/tags/ViewTemplateBodyFilter` entry) routes eligible tiddlers with state `yes` to `ui/body`, which renders `<$outline>` around the usual block transclusion, plus the ? button and, while `$:/temp/rimir/outline/help/<title>` is `yes`, the key overview. Both sit outside `<$outline>`, so they never become units; the widget only sets and deletes that temp tiddler (`?`, Escape).
 
 !! Editor
 

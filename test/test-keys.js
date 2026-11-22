@@ -62,6 +62,7 @@ describe("outline selection and keys", function() {
 		mods = mods || {};
 		var ev = {
 			keyCode: keyCode,
+			key: mods.key,
 			shiftKey: !!mods.shift, altKey: !!mods.alt, ctrlKey: !!mods.ctrl, metaKey: false,
 			target: mods.target || r.widget.domNode,
 			defaultPrevented: !!mods.defaultPrevented,
@@ -103,9 +104,10 @@ describe("outline selection and keys", function() {
 			expected = {
 				"outline-up": "Up", "outline-down": "Down", "outline-move-up": "alt-Up", "outline-move-down": "alt-Down",
 				"outline-indent": "Tab", "outline-promote": "shift-Tab", "outline-edit": "Enter", "outline-menu": "shift-Enter",
-				"outline-parent": "Left", "outline-child": "Right", "outline-edit-up": "ctrl-Up", "outline-edit-down": "ctrl-Down",
+				"outline-parent": "Left", "outline-child": "Right", "outline-up-deep": "ctrl-Up", "outline-down-deep": "ctrl-Down", "outline-edit-up": "ctrl-Up", "outline-edit-down": "ctrl-Down",
 				"outline-open": "Enter", "outline-clear": "Escape", "outline-save": "ctrl-Enter",
-				"outline-continue": "Enter", "outline-newline": "shift-Enter", "outline-cancel": "Escape"
+				"outline-continue": "Enter", "outline-newline": "shift-Enter", "outline-cancel": "Escape",
+				"outline-help": "shift-slash"
 			};
 		Object.keys(expected).forEach(function(name) {
 			expect(name + "=" + wiki.getTiddlerText("$:/config/shortcuts/" + name)).toBe(name + "=" + expected[name]);
@@ -114,6 +116,65 @@ describe("outline selection and keys", function() {
 		var up = $tw.keyboardManager.parseKeyDescriptors("((outline-move-up))", {wiki: wiki});
 		expect(up[0].keyCode).toBe(38);
 		expect(up[0].altKey).toBe(true);
+	});
+
+	it("every shortcut is in exactly one key group, every group key is a shortcut", function() {
+		var names = $tw.wiki.filterTiddlers("[all[shadows+tiddlers]removeprefix[$:/config/shortcuts/]prefix[outline-]]").sort(),
+			grouped = [];
+		$tw.wiki.getTiddlerList("$:/plugins/rimir/outline/key-groups").forEach(function(group) {
+			expect($tw.wiki.getTiddler(group)).withContext(group).toBeTruthy();
+			grouped = grouped.concat($tw.wiki.getTiddlerList(group));
+		});
+		expect(grouped.slice().sort()).toEqual(names);
+	});
+
+	it("? (any layout) and the help key toggle the key overview; Escape closes it before clearing", function() {
+		var r = renderOutline(makeWiki([{title: "T", text: "* a\n* b"}]), "T"),
+			HELP = "$:/temp/rimir/outline/help/T";
+		// Nothing selected: the overview still opens
+		var ev = key(r, 219, {shift: true, key: "?"});
+		expect(ev.prevented).toBe(true);
+		expect(r.wiki.getTiddlerText(HELP)).toBe("yes");
+		key(r, 191, {shift: true, key: "?"});
+		expect(r.wiki.tiddlerExists(HELP)).toBe(false);
+		// The configured key (shift-slash), whatever character it types
+		key(r, 191, {shift: true, key: "_"});
+		expect(r.wiki.getTiddlerText(HELP)).toBe("yes");
+		// Ctrl-? is not the typed character
+		expect(key(r, 219, {ctrl: true, key: "?"}).prevented).toBe(false);
+		r.widget.select(0);
+		ev = key(r, KEYS.escape);
+		expect(ev.prevented).toBe(true);
+		expect(r.wiki.tiddlerExists(HELP)).toBe(false);
+		expect(r.widget.selectedId).toBe(0);
+		key(r, KEYS.escape);
+		expect(r.widget.selectedId).toBe(-1);
+	});
+
+	it("the key overview shows every group and the current keys", function() {
+		var html = $tw.wiki.renderTiddler("text/html", "$:/plugins/rimir/outline/ui/keys-table");
+		$tw.wiki.getTiddlerList("$:/plugins/rimir/outline/key-groups").forEach(function(group) {
+			expect(html).toContain($tw.wiki.getTiddler(group).fields.caption);
+		});
+		expect(html).toContain("<kbd>alt-Up</kbd>");
+		expect(html).toContain("Select the parent unit");
+		expect(html).not.toContain("Outline:");
+		// Fixed block menu keys
+		expect(html).toContain("<kbd>Home</kbd>");
+		// A changed key shows at once
+		$tw.wiki.addTiddler({title: "$:/config/shortcuts/outline-move-up", text: "ctrl-shift-K"});
+		try {
+			expect($tw.wiki.renderTiddler("text/html", "$:/plugins/rimir/outline/ui/keys-table")).toContain("<kbd>ctrl-shift-K</kbd>");
+		} finally {
+			$tw.wiki.deleteTiddler("$:/config/shortcuts/outline-move-up");
+		}
+	});
+
+	it("the settings tab has a shortcut editor row for every outline key", function() {
+		var html = $tw.wiki.renderTiddler("text/html", "$:/plugins/rimir/outline/settings");
+		$tw.wiki.filterTiddlers("[all[shadows+tiddlers]removeprefix[$:/config/shortcuts/]prefix[outline-]]").forEach(function(name) {
+			expect(html).withContext(name).toContain("<strong>" + name + "</strong>");
+		});
 	});
 
 	it("select marks the unit and saves the selection", function() {
@@ -141,16 +202,57 @@ describe("outline selection and keys", function() {
 		expect(ev.prevented).toBe(true);
 		expect(ev.stopped).toBe(true);
 		expect(r.widget.selectedId).toBe(0);
-		key(r, KEYS.down);
+		// Ctrl-Down: every unit, into the list
+		key(r, KEYS.down, {ctrl: true});
 		expect(r.widget.selectedId).toBe(1);
 		key(r, KEYS.down);
 		expect(selectedSource(r)).toBe("para");
 		key(r, KEYS.down);
 		expect(selectedSource(r)).toBe("para");
-		key(r, KEYS.up);
+		key(r, KEYS.up, {ctrl: true});
 		expect(r.widget.selectedId).toBe(1);
 		r.widget.select(2);
 		expect(r.widget.selectedId).toBe(1);
+	});
+
+	it("up/down treat a whole list as one block; ctrl-up/down step through its items", function() {
+		var r = renderOutline(makeWiki([{title: "T", text: "! H\n\n* a\n** a1\n* b\n\npara\n\n# n\n\nend"}]), "T");
+		function sel() { var u = selectedUnit(r); return u.kind === "list" ? "list:" + r.widget.model.text.substring(u.start, u.start + 1) : selectedSource(r); }
+		r.widget.select(idOf(r, "! H"));
+		key(r, KEYS.down);
+		expect(sel()).toBe("list:*");
+		// Down from the whole list: the block after it
+		key(r, KEYS.down);
+		expect(sel()).toBe("para");
+		// Up from below: the whole list, then the block above it
+		key(r, KEYS.up);
+		expect(sel()).toBe("list:*");
+		key(r, KEYS.up);
+		expect(sel()).toBe("! H");
+		// Inside a list: item by item; Down from the last item leaves the list
+		r.widget.select(idOf(r, "* a"));
+		key(r, KEYS.down);
+		expect(sel()).toBe("** a1");
+		key(r, KEYS.down);
+		expect(sel()).toBe("* b");
+		key(r, KEYS.up);
+		expect(sel()).toBe("** a1");
+		r.widget.select(idOf(r, "* b"));
+		key(r, KEYS.down);
+		expect(sel()).toBe("para");
+		// From a list straight to the next list: selected as a whole when coming from below
+		r.widget.select(idOf(r, "end"));
+		key(r, KEYS.up);
+		expect(sel()).toBe("list:#");
+		key(r, KEYS.up);
+		expect(sel()).toBe("para");
+		// Ctrl-Up from below a list: its last item; Ctrl-Down from the list: its first item
+		key(r, KEYS.up, {ctrl: true});
+		expect(sel()).toBe("* b");
+		r.widget.select(idOf(r, "! H"));
+		key(r, KEYS.down);
+		key(r, KEYS.down, {ctrl: true});
+		expect(sel()).toBe("* a");
 	});
 
 	it("left/right select the parent and the first child", function() {

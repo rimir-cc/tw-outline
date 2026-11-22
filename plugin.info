@@ -3,11 +3,11 @@
     "description": "Outline mode: select, edit, move and indent blocks of a wikitext tiddler in its rendered view",
     "name": "outline",
     "author": "rimir",
-    "version": "0.0.3",
+    "version": "0.0.4",
     "core-version": ">=5.4.0",
     "source": "https://github.com/rimir-cc/tw-outline",
     "plugin-type": "plugin",
-    "list": "readme documentation settings changelog license",
+    "list": "readme documentation settings keys changelog license",
     "dependents": "",
     "soft-dependents": [
         "$:/plugins/rimir/doc-template",

@@ -1,0 +1,32 @@
+title: $:/plugins/rimir/outline/ui/keys-table
+description: Key overview of the outline plugin: one table per group of $:/plugins/rimir/outline/key-groups, keys read live from the shortcut config (platform variants included). Shown in the keys tab and the ? overlay.
+
+\whitespace trim
+\function ol-key-state() [all[shadows+tiddlers]prefix[$:/config/shortcuts]suffix<slash-name>get[text]join[ ]]
+\function ol-key-description() [<name>addprefix[$:/config/ShortcutInfo/]get[text]split[: ]rest[]join[: ]sentencecase[]]
+<div class="rr-ol-keys">
+<$list filter="[list[$:/plugins/rimir/outline/key-groups]]" variable="group">
+<div class="rr-ol-keys-group">
+<div class="rr-ol-keys-caption"><$text text={{{ [<group>get[caption]] }}}/></div>
+<%if [list<group>] %>
+<table class="rr-ol-keys-table"><tbody>
+<$list filter="[list<group>]" variable="name">
+<tr>
+<td class="rr-ol-keys-key">
+<!-- keyed on the key texts of all platforms: displayshortcuts output does not refresh by itself -->
+<$let slash-name={{{ [<name>addprefix[/]] }}}>
+<$list filter="[function[ol-key-state]]" variable="key-state">
+<$macrocall $name="displayshortcuts" $output="text/html" shortcuts={{{ [<name>addprefix[((]addsuffix[))]] }}} prefix="<kbd>" separator="</kbd> <kbd>" suffix="</kbd>"/>
+</$list>
+</$let>
+</td>
+<td><$text text=<<ol-key-description>>/></td>
+</tr>
+</$list>
+</tbody></table>
+<%endif%>
+<$transclude $tiddler=<<group>> $mode="block"/>
+<%if [<group>has[hint]] %><div class="rr-ol-keys-hint"><$text text={{{ [<group>get[hint]] }}}/></div><%endif%>
+</div>
+</$list>
+</div>

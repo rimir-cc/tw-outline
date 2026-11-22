@@ -160,3 +160,96 @@ tags: $:/tags/Stylesheet
 	background: <<colour alert-background>>;
 	color: <<colour alert-foreground>>;
 }
+
+/* Key overview: a small ? at the top right of the outline, the overview floats below it */
+.rr-ol-frame {
+	position: relative;
+}
+
+.rr-ol-help-bar {
+	position: absolute;
+	top: 0;
+	right: 0;
+	z-index: 900;
+	height: 0;
+}
+
+.rr-ol-help-button.tc-btn-invisible {
+	position: absolute;
+	top: -1.6em;
+	right: 0;
+	width: 1.4em;
+	height: 1.4em;
+	line-height: 1.3em;
+	padding: 0;
+	border: 1px solid <<colour muted-foreground>>;
+	border-radius: 50%;
+	font-size: 0.8em;
+	font-weight: bold;
+	color: <<colour muted-foreground>>;
+	opacity: 0.6;
+}
+
+.rr-ol-help-button.tc-btn-invisible:hover {
+	opacity: 1;
+	color: <<colour primary>>;
+	border-color: <<colour primary>>;
+}
+
+.rr-ol-help {
+	position: absolute;
+	top: 0.2em;
+	right: 0;
+	width: 26em;
+	max-width: calc(100vw - 2em);
+	max-height: 70vh;
+	overflow-y: auto;
+	padding: 0.5em 0.8em;
+	background: <<colour dropdown-background>>;
+	border: 1px solid <<colour dropdown-border>>;
+	border-radius: 4px;
+	box-shadow: 1px 1px 5px rgba(0,0,0,0.15);
+	font-size: 0.9em;
+}
+
+.rr-ol-help-close.tc-btn-invisible {
+	float: right;
+	padding: 0;
+}
+
+.rr-ol-help-close svg {
+	width: 0.9em;
+	height: 0.9em;
+	fill: <<colour muted-foreground>>;
+}
+
+.rr-ol-keys-group {
+	margin-bottom: 0.7em;
+}
+
+.rr-ol-keys-caption {
+	font-weight: bold;
+	margin-bottom: 0.2em;
+}
+
+table.rr-ol-keys-table {
+	width: 100%;
+	margin: 0;
+	border: none;
+}
+
+table.rr-ol-keys-table td {
+	padding: 0.1em 0.4em 0.1em 0;
+	border: none;
+	vertical-align: top;
+}
+
+td.rr-ol-keys-key {
+	width: 7.5em;
+	white-space: nowrap;
+}
+
+.rr-ol-keys-hint {
+	font-size: 0.85em;
+	color: <<colour muted-foreground>>;
+}

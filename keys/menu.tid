@@ -1,0 +1,10 @@
+title: $:/plugins/rimir/outline/key-groups/menu
+caption: In the block menu
+hint: Fixed keys, not configurable.
+
+<table class="rr-ol-keys-table"><tbody>
+<tr><td class="rr-ol-keys-key"><kbd>Up</kbd> <kbd>Down</kbd></td><td>choose an entry</td></tr>
+<tr><td class="rr-ol-keys-key"><kbd>Home</kbd> <kbd>End</kbd></td><td>first / last entry</td></tr>
+<tr><td class="rr-ol-keys-key"><kbd>Enter</kbd></td><td>run the entry</td></tr>
+<tr><td class="rr-ol-keys-key"><kbd>Escape</kbd></td><td>close the menu</td></tr>
+</tbody></table>

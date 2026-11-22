@@ -2,47 +2,25 @@ title: $:/plugins/rimir/outline/settings
 type: text/vnd.tiddlywiki
 
 \whitespace trim
-\import [[$:/plugins/rimir/theme/procedures-settings]]
+\import [[$:/plugins/rimir/theme/procedures-settings]] [[$:/core/ui/ControlPanel/KeyboardShortcuts]]
 
-\procedure ol-shortcut(name, label, hint)
-<$transclude $variable="rr-settings-row" label=<<label>> hint=<<hint>>><$fill $name="body"><$macrocall $name="rr-config-input" tid={{{ [<name>addprefix[$:/config/shortcuts/]] }}} size="medium"/></$fill></$transclude>
-\end
 
 !! Outline
 
 Select, edit, move and indent the blocks of a wikitext tiddler in place. See the <<tag "readme">> and documentation tabs. There is nothing to switch on globally: outline mode is toggled per tiddler with the //outline// button in the view toolbar.
 
 <$transclude $variable="rr-settings-section" title="Editor"><$fill $name="body">
-<$transclude $variable="rr-settings-row" label="Full editor" hint="Off (default): Shift-Enter opens a compact one-line field that grows with its text. On: the full text editor with toolbar."><$fill $name="body"><$macrocall $name="rr-config-checkbox" tid="$:/config/rimir/outline/full-editor" label="Use the full editor with toolbar"/></$fill></$transclude>
+<$transclude $variable="rr-settings-row" label="Full editor" hint="Off (default): Enter opens a compact one-line field that grows with its text. On: the full text editor with toolbar."><$fill $name="body"><$macrocall $name="rr-config-checkbox" tid="$:/config/rimir/outline/full-editor" label="Use the full editor with toolbar"/></$fill></$transclude>
 </$fill></$transclude>
 
-<$transclude $variable="rr-settings-section" title="Keyboard shortcuts" hint="Standard TW shortcut tiddlers ($:/config/shortcuts/outline-*): edit here or in ControlPanel > Keyboard Shortcuts. Syntax like ctrl-Enter, alt-Up, shift-Tab. Changes apply at once. Platform variants (-mac, -not-mac, ...) override these if you create them."><$fill $name="body">
-
-<$transclude $variable="rr-settings-subsection" title="Selection"><$fill $name="body">
-<<ol-shortcut name:"outline-up" label:"Previous unit" hint:"Select the previous unit">>
-<<ol-shortcut name:"outline-down" label:"Next unit" hint:"Select the next unit">>
-<<ol-shortcut name:"outline-parent" label:"Parent" hint:"Select the parent unit: the item of a sub-item, the whole list of a top-level item, the heading of a section">>
-<<ol-shortcut name:"outline-child" label:"First child" hint:"Select the first child unit">>
-<<ol-shortcut name:"outline-clear" label:"Clear selection" hint:"Escape, when not editing">>
-<<ol-shortcut name:"outline-open" label:"Open transclusion" hint:"Opens the target of a transclusion unit in outline mode">>
+<$transclude $variable="rr-settings-section" title="Keyboard shortcuts" hint="The editor of ControlPanel > Keyboard Shortcuts, for the outline keys only: open a row, then the pencil of a platform to add a key by pressing it or to remove one. Changes apply at once. Press ? in an outline (or see the keys tab) for the overview."><$fill $name="body">
+<$list filter="[list[$:/plugins/rimir/outline/key-groups]has[list]]" variable="group">
+<$transclude $variable="rr-settings-subsection" title={{{ [<group>get[caption]] }}}><$fill $name="body">
+<table class="rr-ol-shortcut-editor"><tbody>
+<$list filter="[list<group>]" variable="shortcutName">
+<<shortcut-item>>
+</$list>
+</tbody></table>
 </$fill></$transclude>
-
-<$transclude $variable="rr-settings-subsection" title="Structure"><$fill $name="body">
-<<ol-shortcut name:"outline-move-up" label:"Move up" hint:"Swap with the previous sibling, subtree included">>
-<<ol-shortcut name:"outline-move-down" label:"Move down" hint:"Swap with the next sibling, subtree included">>
-<<ol-shortcut name:"outline-indent" label:"Indent" hint:"Demote the unit and its subtree by one level">>
-<<ol-shortcut name:"outline-promote" label:"Promote" hint:"Promote the unit and its subtree by one level">>
-</$fill></$transclude>
-
-<$transclude $variable="rr-settings-subsection" title="Editor"><$fill $name="body">
-<<ol-shortcut name:"outline-edit" label:"Edit in place" hint:"Open the editor on the selected unit (on a transclusion Enter opens its target)">>
-<<ol-shortcut name:"outline-menu" label:"Block menu" hint:"Insert a new block after the selected unit, or turn it into another type">>
-<<ol-shortcut name:"outline-save" label:"Save" hint:"Write the edit and close the editor">>
-<<ol-shortcut name:"outline-continue" label:"Save and new" hint:"Save, then open a new unit (single-line units only)">>
-<<ol-shortcut name:"outline-newline" label:"Line break" hint:"Insert a newline in the editor">>
-<<ol-shortcut name:"outline-cancel" label:"Cancel" hint:"Discard the edit">>
-<<ol-shortcut name:"outline-edit-up" label:"Edit previous" hint:"Save and move the editor to the previous unit">>
-<<ol-shortcut name:"outline-edit-down" label:"Edit next" hint:"Save and move the editor to the next unit">>
-</$fill></$transclude>
-
+</$list>
 </$fill></$transclude>

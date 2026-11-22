@@ -1,7 +1,9 @@
 title: $:/config/ShortcutInfo/
 
-outline-up: Outline: select the previous unit
-outline-down: Outline: select the next unit
+outline-up: Outline: select the previous unit (a list above is selected as a whole)
+outline-down: Outline: select the next unit (a whole list counts as one block)
+outline-up-deep: Outline: select the previous unit, also inside lists
+outline-down-deep: Outline: select the next unit, also inside lists
 outline-parent: Outline: select the parent unit (item, list, heading)
 outline-child: Outline: select the first child unit
 outline-move-up: Outline: move the selected unit and its subtree above its previous sibling
@@ -18,3 +20,4 @@ outline-newline: Outline editor: insert a line break
 outline-cancel: Outline editor: discard the edit
 outline-edit-up: Outline editor: save and edit the previous unit
 outline-edit-down: Outline editor: save and edit the next unit
+outline-help: Outline: show or hide the key overview

@@ -1,0 +1,4 @@
+title: $:/plugins/rimir/outline/key-groups/help
+caption: Help
+hint: ? always works too, whatever the keyboard layout. Escape closes the overview.
+list: outline-help

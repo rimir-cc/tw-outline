@@ -12,6 +12,7 @@ Work on an ordinary tiddler like on a Streams outline: select a block, edit it i
 - **Indent** - Tab/Shift-Tab demote/promote list items and headings with their subtrees.
 - **In-place editor** - Enter opens TW's own edit widget at the unit: a compact one-line field by default, optionally the full editor with toolbar. Lists and headings are edited without their marker; nesting stays with Tab/Shift-Tab. Ctrl-Enter saves, Enter saves and starts a new unit, Escape discards, Ctrl-Up/Down save and move the editor to the previous/next unit.
 - **Block menu** - Shift-Enter: insert a new paragraph, heading, list, quote or code block after the selection, or turn the selection into another type.
+- **Key overview** - press `?` in an outline (or its small ? button) for a table of all keys; the *keys* tab shows the same. Every key is configurable in the settings tab with TW's shortcut editor.
 - **Transclusions** - a marker on `{{...}}` lines; Enter opens the target in outline mode.
 - **Safe writes** - every write is a splice of a known range; changed text is relocated or refused, never guessed.
 
@@ -26,5 +27,6 @@ Work on an ordinary tiddler like on a Streams outline: select a block, edit it i
 2. Open a wikitext tiddler and press *outline* in its view toolbar.
 3. Click a block; Up/Down select, Alt-Down moves, Tab indents.
 4. Enter edits, Ctrl-Enter saves.
+5. `?` shows all keys.
 
 Wikitext only; Markdown is not supported yet. llm-inline `AI:` lines do not fire from outline edits.

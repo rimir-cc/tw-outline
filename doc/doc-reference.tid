@@ -17,7 +17,8 @@ type: text/vnd.tiddlywiki
 !! Keys
 
 |!Shortcut tiddler |!Default |!Action |
-|`outline-up` / `outline-down` |Up / Down |Select previous / next unit |
+|`outline-up` / `outline-down` |Up / Down |Select previous / next unit. A whole list counts as one block: Down from a selected list goes to the block after it, Up from below a list selects the whole list; inside a list they go item by item |
+|`outline-up-deep` / `outline-down-deep` |ctrl-Up / ctrl-Down |Select previous / next unit in document order, also into lists (from below a list: its last item) |
 |`outline-parent` / `outline-child` |Left / Right |Select the parent unit (item of a sub-item, whole list of a top-level item, heading of a section) / the first child |
 |`outline-move-up` / `outline-move-down` |alt-Up / alt-Down |Swap with previous / next sibling |
 |`outline-indent` / `outline-promote` |Tab / shift-Tab |Demote / promote by one level |
@@ -33,8 +34,13 @@ type: text/vnd.tiddlywiki
 |`outline-edit-up` |ctrl-Up |Editor only: save and edit the previous unit |
 |`outline-edit-down` |ctrl-Down |Editor only: save and edit the next unit |
 |`outline-cancel` |Escape |Discard the edit |
+|`outline-help` |shift-slash |Show / hide the key overview. `?` always works too, whatever the keyboard layout; Escape closes it |
 
-All are `$:/config/shortcuts/<name>`; descriptions are in `$:/config/ShortcutInfo/<name>`.
+All are `$:/config/shortcuts/<name>`; descriptions are in `$:/config/ShortcutInfo/<name>`. Change them in the settings tab (the core shortcut editor, press the key to record it, platform variants included) or in ControlPanel > Keyboard Shortcuts.
+
+!! Key overview
+
+The //keys// tab and the overlay (`?` in an outline, or the small ? button at its top right) show the same table, `$:/plugins/rimir/outline/ui/keys-table`, with the keys read live from the config. Its groups are the tiddlers listed in `$:/plugins/rimir/outline/key-groups`: each has a `caption`, an optional `hint`, a `list` of shortcut names and, optionally, text shown after the keys (the fixed block menu keys). The settings tab uses the same groups.
 
 In multi-line units (code blocks, tables, widgets, `"""` items) Enter is a plain newline and only Ctrl-Enter saves.
 
@@ -55,6 +61,8 @@ Swap the unit's whole subtree with the adjacent sibling's whole subtree, blank-l
 !! New unit (Enter)
 
 * List item: same marker, after the item's whole subtree.
+* Heading: paragraph directly under the heading line.
+* Paragraph: paragraph after it.
 
 !! Block menu
 
@@ -65,14 +73,12 @@ Swap the unit's whole subtree with the adjacent sibling's whole subtree, blank-l
 |Whole list |the same |Bulleted ↔ Numbered (all levels) |
 |List item |– |Bulleted ↔ Numbered (with all its siblings of that level) |
 |Transclusion |the same, plus //Edit this line// first |– |
-* Heading: paragraph directly under the heading line.
-* Paragraph: paragraph after it.
 
 !! State and config
 
 |!Tiddler |!Purpose |
 |`$:/state/rimir/outline/on/<title>` |Outline mode on (`yes`) / off |
-|`$:/temp/rimir/outline/...` |Editor buffer and selection while active |
+|`$:/temp/rimir/outline/...` |Editor buffer, selection and open key overview (`help/<title>`) while active |
 |`$:/config/rimir/outline/full-editor` |`yes`: full text editor with toolbar; otherwise (default `no`) the compact one-line editor |
 
 </$fill>

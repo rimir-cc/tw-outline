@@ -1,0 +1,4 @@
+title: $:/plugins/rimir/outline/key-groups
+list: [[$:/plugins/rimir/outline/key-groups/navigate]] [[$:/plugins/rimir/outline/key-groups/change]] [[$:/plugins/rimir/outline/key-groups/editor]] [[$:/plugins/rimir/outline/key-groups/menu]] [[$:/plugins/rimir/outline/key-groups/help]]
+
+Groups of the outline keys, in display order. Each group tiddler has a caption, an optional hint, and a list field with the shortcut names (outline-*); its text, if any, is shown after its keys (fixed keys that cannot be configured). Used by the settings tab and the key overview (ui/keys-table).
