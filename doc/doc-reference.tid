@@ -18,14 +18,20 @@ type: text/vnd.tiddlywiki
 
 |!Shortcut tiddler |!Default |!Action |
 |`outline-up` / `outline-down` |Up / Down |Select previous / next unit |
+|`outline-parent` / `outline-child` |Left / Right |Select the parent unit (item of a sub-item, whole list of a top-level item, heading of a section) / the first child |
 |`outline-move-up` / `outline-move-down` |alt-Up / alt-Down |Swap with previous / next sibling |
 |`outline-indent` / `outline-promote` |Tab / shift-Tab |Demote / promote by one level |
-|`outline-edit` |shift-Enter |Edit in place |
+|`outline-edit` |Enter |Edit in place (on a transclusion Enter opens the target) |
+|`outline-menu` |shift-Enter |Block menu: insert a new block after the unit, or turn it into another type; Up/Down, Enter runs, Escape closes |
 |`outline-open` |Enter |Open the transclusion target in outline mode |
 |`outline-clear` |Escape |Clear selection |
 |`outline-save` |ctrl-Enter |Save the edit |
 |`outline-continue` |Enter |Save and open a new unit (single-line units) |
-|`outline-newline` |shift-Enter |Newline in the editor |
+|`outline-newline` |shift-Enter |Newline in the editor (saved as `<br>` in list items and headings) |
+|`outline-indent` / `outline-promote` |Tab / shift-Tab |In the editor too: save, indent / promote, keep editing |
+|`outline-move-up` / `outline-move-down` |alt-Up / alt-Down |In the editor too: save, move, keep editing |
+|`outline-edit-up` |ctrl-Up |Editor only: save and edit the previous unit |
+|`outline-edit-down` |ctrl-Down |Editor only: save and edit the next unit |
 |`outline-cancel` |Escape |Discard the edit |
 
 All are `$:/config/shortcuts/<name>`; descriptions are in `$:/config/ShortcutInfo/<name>`.
@@ -49,6 +55,16 @@ Swap the unit's whole subtree with the adjacent sibling's whole subtree, blank-l
 !! New unit (Enter)
 
 * List item: same marker, after the item's whole subtree.
+
+!! Block menu
+
+|!Selected |!Insert after |!Turn into |
+|Paragraph |Paragraph, Heading 1–3, Bulleted/Numbered list, Quote, Code block |Heading 1–3, Bulleted/Numbered list, Quote, Code block |
+|Heading |the same (a heading goes after the section, other blocks right below the heading) |Paragraph, Bulleted/Numbered list, Quote, Code block |
+|Code block |the same |Paragraph, Bulleted/Numbered list, Quote |
+|Whole list |the same |Bulleted ↔ Numbered (all levels) |
+|List item |– |Bulleted ↔ Numbered (with all its siblings of that level) |
+|Transclusion |the same, plus //Edit this line// first |– |
 * Heading: paragraph directly under the heading line.
 * Paragraph: paragraph after it.
 
@@ -57,6 +73,7 @@ Swap the unit's whole subtree with the adjacent sibling's whole subtree, blank-l
 |!Tiddler |!Purpose |
 |`$:/state/rimir/outline/on/<title>` |Outline mode on (`yes`) / off |
 |`$:/temp/rimir/outline/...` |Editor buffer and selection while active |
+|`$:/config/rimir/outline/full-editor` |`yes`: full text editor with toolbar; otherwise (default `no`) the compact one-line editor |
 
 </$fill>
 </$transclude>

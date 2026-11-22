@@ -292,6 +292,25 @@ describe("outline widget", function() {
 		}).length).toBe(2);
 	});
 
+	it("code blocks of a widget override (\\widget $codeblock) are units too", function() {
+		var wiki = makeWiki([{title: "T", text: "para\n\n```\none\n```\n\n* a\n\n```\ntwo\n```\n\nend"}]),
+			r = render(wiki, "\\widget $codeblock(code, language)\n<div class=\"kk-cap\">cap</div><div class=\"kk-code\"><$genesis $type=\"$codeblock\" $remappable=\"no\" code=<<code>> language=<<language>>/></div>\n\\end\n" +
+				"<$outline tiddler=\"T\"><$transclude $tiddler=\"T\" $mode=\"block\"/></$outline>"),
+			w = findWidget(r.root, "outline"),
+			codes = w.model.units.filter(function(u) { return u.tag === "codeblock"; });
+		expect(codes.length).toBe(2);
+		codes.forEach(function(u, i) {
+			var nodes = w.units[u.id].domNodes;
+			expect(nodes.length).toBe(2);
+			expect(nodes[0].getAttribute("class")).toContain("kk-cap");
+			expect(nodes[1].getAttribute("data-ol-id")).toBe(String(u.id));
+			expect(w.isSelectable(u.id)).toBe(true);
+			expect(nodes[1].textContent).toContain(i === 0 ? "one" : "two");
+		});
+		// The units after them still map
+		expect(w.units.every(function(m) { return m.domNodes.length > 0; })).toBe(true);
+	});
+
 	describe("toolbar button", function() {
 
 		var BUTTON = "$:/plugins/rimir/outline/ui/toolbar-button";

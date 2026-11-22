@@ -10,7 +10,7 @@ widget.domNode and widget.tiddlerTitle (see outline-widget.js).
 Selection state: $:/temp/rimir/outline/selection/<title> with fields start, index and kind.
 After a re-render the unit with the saved start is selected again (same kind preferred, because a list
 and its first item share a start). Otherwise the saved index, clamped. Units without DOM nodes cannot
-be selected.
+be selected. A list item with sub-items is framed around its own lines only (drawSelectionBox).
 
 \*/
 "use strict";
@@ -27,7 +27,10 @@ var formats = require("$:/plugins/rimir/outline/formats.js"),
 
 var SELECTION_PREFIX = "$:/temp/rimir/outline/selection/",
 	READ_ONLY = "$:/status/IsReadOnly",
-	SELECTED_CLASS = "rr-ol-selected";
+	SELECTED_CLASS = "rr-ol-selected",
+	OWN_CLASS = "rr-ol-selected-own",
+	BOX_CLASS = "rr-ol-selbox",
+	NESTED_TAGS = {UL: true, OL: true, DL: true, BLOCKQUOTE: true};
 
 /*
 Select-mode actions in matching order. run returns true when the key is consumed. Structural keys
@@ -37,9 +40,12 @@ so Tab never moves the focus away from a selection. In read-only wikis only up/d
 var ACTIONS = [
 	{name: "outline-up", run: function(w) { return w.step(-1); }},
 	{name: "outline-down", run: function(w) { return w.step(1); }},
+	{name: "outline-parent", run: function(w) { return w.stepTree(-1); }},
+	{name: "outline-child", run: function(w) { return w.stepTree(1); }},
 	{name: "outline-clear", run: function(w) { return w.clearSelection(); }},
 	{name: "outline-open", run: function(w) { return w.openTransclusion(); }},
 	{name: "outline-edit", run: function(w) { return w.editSelected(); }},
+	{name: "outline-menu", run: function(w) { return w.openMenu(); }},
 	{name: "outline-move-up", run: function(w) { return w.operate("move", -1); }},
 	{name: "outline-move-down", run: function(w) { return w.operate("move", 1); }},
 	{name: "outline-indent", run: function(w) { return w.operate("indent"); }},
@@ -127,10 +133,76 @@ methods.showSelection = function(id) {
 		setClass(node, SELECTED_CLASS, false);
 	});
 	this.selectedId = id;
+	if(this.menu) {
+		if(this.menu.id !== id) {
+			this.closeMenu();
+		} else {
+			this.positionMenu();
+		}
+	}
 	this.selectedNodes = id === -1 ? [] : this.units[id].domNodes.slice();
 	$tw.utils.each(this.selectedNodes, function(node) {
 		setClass(node, SELECTED_CLASS, true);
 	});
+	this.drawSelectionBox();
+};
+
+// First child element of a list item that holds its sub-items, or null
+function nestedListOf(node) {
+	for(var child = node.firstChild; child; child = child.nextSibling) {
+		if(child.nodeType === 1 && NESTED_TAGS[child.tagName]) {
+			return child;
+		}
+	}
+	return null;
+}
+
+/*
+A selected list item with sub-items gets its frame from an overlay box around its own lines only (the item's
+element contains its sub-items). Moves still take the sub-items along. Called after every selection change and
+when the outline container resizes. Needs a real DOM (ranges, layout); elsewhere the item keeps its plain frame.
+*/
+methods.drawSelectionBox = function() {
+	var nodes = this.selectedNodes || [],
+		doc = this.document,
+		box = this.selectionBox,
+		target = null,
+		nested = null;
+	$tw.utils.each(nodes, function(node) {
+		setClass(node, OWN_CLASS, false);
+	});
+	if(this.selectedId !== -1 && this.units[this.selectedId].unit.kind === "item" && nodes.length === 1 &&
+		doc.createRange && nodes[0].getBoundingClientRect && this.domNode.getBoundingClientRect) {
+		nested = nestedListOf(nodes[0]);
+		target = nested ? nodes[0] : null;
+	}
+	if(!target) {
+		if(box) {
+			box.style.display = "none";
+		}
+		return;
+	}
+	var range = doc.createRange();
+	range.setStart(target, 0);
+	range.setEndBefore(nested);
+	var own = range.getBoundingClientRect(),
+		item = target.getBoundingClientRect(),
+		root = this.domNode.getBoundingClientRect(),
+		top = own.height ? own.top : item.top,
+		bottom = own.height ? own.bottom : nested.getBoundingClientRect().top;
+	if(!box) {
+		box = this.selectionBox = doc.createElement("div");
+		box.className = BOX_CLASS;
+	}
+	if(box.parentNode !== this.domNode) {
+		this.domNode.appendChild(box);
+	}
+	box.style.display = "";
+	box.style.left = (item.left - root.left) + "px";
+	box.style.top = (top - root.top) + "px";
+	box.style.width = item.width + "px";
+	box.style.height = Math.max(0, bottom - top) + "px";
+	setClass(target, OWN_CLASS, true);
 };
 
 // Re-apply the saved selection after (re-)mapping
@@ -157,6 +229,52 @@ methods.step = function(dir) {
 	this.select(i);
 	scrollIntoView(this.units[i].domNodes[0]);
 	return true;
+};
+
+/*
+Left (dir -1): select the parent unit - the item a sub-item belongs to, the whole list of a top-level item, the
+heading of a section.
+Right (1): select the first child: the list of a heading's section, the first item of a list, the first sub-item.
+Units that cannot be selected are passed over. Consumed whenever a unit is selected, also when there is nowhere to go.
+*/
+methods.stepTree = function(dir) {
+	this.ensureCurrent();
+	var id = this.selectedId;
+	if(id === -1) {
+		return false;
+	}
+	var target = dir < 0 ? this.treeParent(id) : this.treeChild(id);
+	if(target !== -1) {
+		this.select(target);
+		scrollIntoView(this.units[target].domNodes[0]);
+	}
+	return true;
+};
+
+methods.treeParent = function(id) {
+	var model = this.model;
+	for(var p = model.units[id].parent; p !== -1; p = model.units[p].parent) {
+		if(this.isSelectable(p)) {
+			return p;
+		}
+	}
+	return -1;
+};
+
+methods.treeChild = function(id) {
+	var model = this.model, self = this;
+	// The first selectable child; a child that cannot be selected stands in for its own first child
+	function first(children) {
+		for(var i = 0; i < children.length; i++) {
+			var c = model.units[children[i]],
+				found = self.isSelectable(c.id) ? c.id : first(c.children);
+			if(found !== -1) {
+				return found;
+			}
+		}
+		return -1;
+	}
+	return first(model.units[id].children);
 };
 
 methods.lastSelectable = function() {
@@ -242,7 +360,8 @@ methods.applyResult = function(result) {
 	}
 	var old = this.wiki.getTiddler(this.tiddlerTitle),
 		id = this.selectedId,
-		kind = id === -1 ? "" : this.units[id].unit.kind;
+		// A conversion changes the unit's kind: the result names the new one
+		kind = result.kind || (id === -1 ? "" : this.units[id].unit.kind);
 	// Same text (e.g. two identical siblings swapped): no write, but the frame still follows result.select
 	if(!old || result.text !== (old.fields.text || "")) {
 		this.writeText(old, result.text);
@@ -261,6 +380,15 @@ methods.handleKeydown = function(event) {
 	// Consumed elsewhere (AutoComplete popups listen in the capture phase), or from an element inside
 	if(event.defaultPrevented || event.target !== this.domNode) {
 		return;
+	}
+	// An open block menu takes its keys; any other key closes it and acts as usual
+	if(this.menu) {
+		if(this.handleMenuKeydown(event)) {
+			event.preventDefault();
+			event.stopPropagation();
+			return;
+		}
+		this.closeMenu();
 	}
 	for(var i = 0; i < ACTIONS.length; i++) {
 		var action = ACTIONS[i];
@@ -283,6 +411,7 @@ the container. Clicks inside the editor host are left to the editor.
 */
 methods.handleClick = function(event) {
 	var node = event.target;
+	this.closeMenu();
 	if(this.editor && this.editor.host && isInside(node, this.editor.host)) {
 		return;
 	}

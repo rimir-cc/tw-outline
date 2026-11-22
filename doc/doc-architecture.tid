@@ -28,8 +28,10 @@ The tiddler is rendered unchanged. A JS widget, `$outline`, wraps the normal bod
 |`outline-widget.js` |The `$outline` widget: unit-to-DOM mapping, stamps, selection, writes |
 |`outline-keys.js` |Key dispatch through `$:/config/shortcuts/outline-*` |
 |`outline-editor.js` |In-place editor: temp tiddler, placeholder, save, continue, conflict handling |
+|`outline-menu.js` |Block menu (Shift-Enter): entries from the adapter, keyboard and mouse, runs insert / convert / edit |
+|`language/blocks.multids` |Labels of the block types and menu groups |
 |`ui/*` |Toolbar button and icon, body template and its filter, editor template, transclusion marker |
-|`styles.tid` |Selection frame, marker |
+|`styles.tid` |Selection frame and item box, compact editor, marker |
 
 !! Routing
 
@@ -38,6 +40,16 @@ The tiddler is rendered unchanged. A JS widget, `$outline`, wraps the normal bod
 !! Editor
 
 The editor is a real TW edit widget bound to a temp tiddler (`$:/temp/rimir/outline/...`), placed where the unit was. It lives outside the rendered body's widget tree, so a re-render of the body does not destroy it. Typing changes only the temp tiddler; the real tiddler changes once per save.
+
+The buffer holds the unit's content only: an item's marker and a heading's `!`s (plus the spaces after them) stay in the tiddler and are not part of the edit (`editSource`/`replace` in the adapter). `ui/editor` renders a compact textarea (no toolbar, SimpleEngine) or, with `$:/config/rimir/outline/full-editor` = `yes`, the full text editor with toolbar.
+
+!! Block menu
+
+Shift-Enter in selection mode opens `.rr-ol-menu`, absolutely positioned below the selected unit in `.rr-ol`. Its entries: //Insert after// (every block type; not for a single list item) and //Turn into// (the adapter's `convertTypes`). Insert opens a new-unit editor with a `blockType` (kept in the buffer field `outline-block-type`); saving calls the adapter's `insertBlock`, which puts a new heading after the anchor heading's whole section and any other block right after the heading line (`insertsAfterSubtree`; the editor is placed accordingly). Turn into runs `operate("convert", type)`: a bullet switches its marker character with all its siblings of that level (and their sub-items at that marker position), a whole list at all levels; paragraphs, headings and code blocks are rewritten from their content and set apart by blank lines. `convert` parses its result again and refuses it unless the new unit is where the old one was and the unit count changed only by an added list unit.
+
+!! Selection frame
+
+Units get the class `rr-ol-selected`. A list item's element contains its sub-items, so for an item with sub-items the frame is an overlay box (`.rr-ol-selbox`, absolutely positioned in `.rr-ol`) around the item's own lines, measured with a DOM range up to the nested list. It is redrawn on every selection change and when the outline container resizes (ResizeObserver).
 
 A re-render of an ancestor (for example a changed `$:/tags/Global` or `$:/tags/Macro` tiddler re-renders the page template) or closing the tiddler destroys the `$outline` widget. A buffer that differs from what the editor started with is then kept: it carries `outline-orig-source`, `outline-orig-start`, `outline-orig-text`, `outline-is-new` and `outline-unit-kind`, and the next `$outline` widget of the tiddler reopens the editor at the unit, located as on save (or with the conflict notice when the unit is gone). Escape and switching outline mode off discard it.
 

@@ -51,6 +51,8 @@ var BUFFER_PREFIX = "$:/temp/rimir/outline/edit/",
 	// Edited unit hidden (blocks) / only its own content hidden (items: sub-items stay visible)
 	EDITING_CLASS = "rr-ol-editing",
 	EDITING_OWN_CLASS = "rr-ol-editing-own",
+	IS_EDITING_CLASS = "rr-ol-is-editing",
+	BLOCK_LABEL_PREFIX = "$:/plugins/rimir/outline/language/block/",
 	NOTICES = {
 		conflict: {cls: "rr-ol-notice rr-ol-conflict", text: "The tiddler changed underneath. Copy your text."},
 		children: {cls: "rr-ol-notice rr-ol-children", text: "Remove or move its children first."},
@@ -76,13 +78,16 @@ function ownersOf(wiki) {
 }
 
 // Editor state for unit kind `unitKind` (for a new unit: the anchor's kind); id and multiline are set by the caller
-function editorState(unitKind, isNew, origSource, origStart, origText) {
+function editorState(unitKind, isNew, origSource, origStart, origText, blockType, adapter) {
+	var typeKind = isNew && blockType && adapter && adapter.blockTypeKind ? adapter.blockTypeKind(blockType) : null;
 	return {
 		host: null,
 		widget: null,
 		id: -1,
 		isNew: isNew,
-		kind: isNew ? (unitKind === "item" ? "item" : "block") : unitKind,
+		// A new unit of a chosen block type (Shift-Enter menu): paragraph, heading1, bulleted, code, ...
+		blockType: typeKind ? blockType : "",
+		kind: typeKind || (isNew ? (unitKind === "item" ? "item" : "block") : unitKind),
 		unitKind: unitKind,
 		placement: isNew ? "after" : (unitKind === "item" ? "inside" : "before"),
 		origSource: origSource,
@@ -148,9 +153,10 @@ methods.startEdit = function(id, opts) {
 	var unit = this.units[id].unit,
 		isNew = !!opts.isNew,
 		adapter = this.getAdapter(),
-		ed = editorState(unit.kind, isNew, this.model.text.substring(unit.start, unit.end), unit.start, this.model.text);
+		ed = editorState(unit.kind, isNew, this.model.text.substring(unit.start, unit.end), unit.start, this.model.text,
+			opts.blockType, adapter);
 	ed.id = id;
-	ed.multiline = !isNew && adapter.isMultiline(this.model, id);
+	ed.multiline = isNew ? ed.blockType === "code" : adapter.isMultiline(this.model, id);
 	this.editor = ed;
 	ownersOf(this.wiki)[this.bufferTitle()] = this;
 	this.wiki.addTiddler(new $tw.Tiddler({
@@ -161,7 +167,8 @@ methods.startEdit = function(id, opts) {
 		"outline-orig-start": String(ed.origStart),
 		"outline-orig-text": ed.origText,
 		"outline-is-new": isNew ? "yes" : "no",
-		"outline-unit-kind": ed.unitKind
+		"outline-unit-kind": ed.unitKind,
+		"outline-block-type": ed.blockType
 	}));
 	this.placeEditor(true);
 	return true;
@@ -182,7 +189,7 @@ methods.restoreEditor = function() {
 		hints = registryOf(restoreHints, this.wiki),
 		hint = hints[title] || {},
 		ed = editorState(f["outline-unit-kind"] || "", f["outline-is-new"] === "yes", f["outline-orig-source"] || "",
-			parseInt(f["outline-orig-start"], 10), f["outline-orig-text"] || "");
+			parseInt(f["outline-orig-start"], 10), f["outline-orig-text"] || "", f["outline-block-type"], this.getAdapter());
 	delete hints[title];
 	this.editor = ed;
 	ownersOf(this.wiki)[title] = this;
@@ -191,7 +198,8 @@ methods.restoreEditor = function() {
 	if(ed.id === -1) {
 		ed.notice = "conflict";
 	}
-	ed.multiline = !ed.isNew && (ed.id === -1 ? /[\r\n]/.test(ed.origSource) : this.getAdapter().isMultiline(this.model, ed.id));
+	ed.multiline = ed.isNew ? ed.blockType === "code" :
+		(ed.id === -1 ? /[\r\n]/.test(ed.origSource) : this.getAdapter().isMultiline(this.model, ed.id));
 	ed.caret = hint.caret || null;
 	this.placeEditor(!!hint.focused);
 	if(hint.focused) {
@@ -220,22 +228,52 @@ methods.releaseEditor = function() {
 	}
 	var keep = this.ownsBuffer() && this.editChanged();
 	if(keep) {
-		var engine = this.editorEngine(),
-			caret = engine && engine.domNode && typeof engine.domNode.selectionStart === "number" ?
-				[engine.domNode.selectionStart, engine.domNode.selectionEnd] : null;
-		registryOf(restoreHints, this.wiki)[this.bufferTitle()] = {focused: this.editor.focused, caret: caret};
+		registryOf(restoreHints, this.wiki)[this.bufferTitle()] = {focused: this.editor.focused, caret: this.editorCaret()};
 	}
 	this.closeEditor(!keep);
 };
 
 // Create host + editor widget at the place of this.editor.id (or at the end of the container).
 // focus: whether the new editor takes the focus when it renders
+/*
+DOM nodes the editor host goes before, into or after. A new block that is inserted after a heading's whole section
+(insertsAfterSubtree) is placed after the section's last top-level node.
+*/
+methods.editAnchorNodes = function() {
+	var ed = this.editor,
+		adapter = this.getAdapter();
+	if(ed.isNew && ed.blockType && adapter && adapter.insertsAfterSubtree(this.model, ed.id, ed.blockType)) {
+		var last = this.lastSectionNode(ed.id);
+		if(last) {
+			return [last];
+		}
+	}
+	return this.units[ed.id].domNodes;
+};
+
+// Last top-level DOM node of unit `id` and its section (sub-sections included), or null
+methods.lastSectionNode = function(id) {
+	var u = this.units[id].unit;
+	if(u.kind === "heading") {
+		for(var i = u.children.length - 1; i >= 0; i--) {
+			var node = this.lastSectionNode(u.children[i]);
+			if(node) {
+				return node;
+			}
+		}
+	}
+	var nodes = this.units[id].domNodes;
+	return nodes.length ? nodes[nodes.length - 1] : null;
+};
+
 methods.placeEditor = function(focus) {
 	var ed = this.editor,
-		nodes = ed.id === -1 ? [] : this.units[ed.id].domNodes,
+		nodes = ed.id === -1 ? [] : this.editAnchorNodes(),
 		host = this.document.createElement(ed.placement === "after" && ed.unitKind === "item" && nodes.length ? "li" : "div"),
 		self = this;
 	host.className = HOST_CLASS;
+	// While an editor is open the field marks the place: no selection frames (they would stay on the saved unit)
+	dom.setClass(this.domNode, IS_EDITING_CLASS, true);
 	if(!nodes.length) {
 		this.domNode.appendChild(host);
 	} else if(ed.placement === "after") {
@@ -248,17 +286,21 @@ methods.placeEditor = function(focus) {
 	}
 	host.addEventListener("keydown", function(event) { self.handleEditorKeydown(event); }, false);
 	host.addEventListener("focusin", function() { if(self.editor) { self.editor.focused = true; } }, false);
-	host.addEventListener("focusout", function() { if(self.editor) { self.editor.focused = false; } }, false);
+	host.addEventListener("focusout", function(event) { self.noteBlur(event.target); }, false);
 	ed.host = host;
 	this.hideEdited();
 	// The host is in the document now: the FramedEngine needs that to create its iframe
+	// Inline: a block-mode parse would wrap the editor in a <p>, whose margin leaves a gap below it
 	ed.widget = this.wiki.makeTranscludeWidget(EDITOR_TIDDLER, {
 		parentWidget: this,
 		document: this.document,
+		parseAsInline: true,
 		variables: {
 			"outline-edit-tiddler": this.bufferTitle(),
 			"len": String(this.wiki.getTiddlerText(this.bufferTitle(), "").length),
-			"outline-edit-focus": focus ? "yes" : "no"
+			"outline-edit-focus": focus ? "yes" : "no",
+			// A new block of a chosen type names its type in the empty field
+			"outline-edit-placeholder": ed.blockType ? this.wiki.getTiddlerText(BLOCK_LABEL_PREFIX + ed.blockType, "") : ""
 		}
 	});
 	ed.widget.render(host, null);
@@ -266,6 +308,25 @@ methods.placeEditor = function(focus) {
 	if(ed.notice) {
 		this.showNotice(ed.notice);
 	}
+};
+
+/*
+The editor lost the focus, unless `node` is being removed: browsers blur a focused element while removing it
+(a re-render of the edited unit), and the re-attached editor must get the focus back then. Decided one tick
+later, when a removed node is no longer connected; focus that moved within the editor (toolbar) also counts.
+*/
+methods.noteBlur = function(node) {
+	var ed = this.editor,
+		self = this;
+	if(!ed) {
+		return;
+	}
+	setTimeout(function() {
+		var active = self.document.activeElement;
+		if(self.editor === ed && node.isConnected !== false && !(ed.host && active && ed.host.contains(active))) {
+			ed.focused = false;
+		}
+	}, 0);
 };
 
 // The FramedEngine's textarea lives in an iframe: its focus events do not reach the host
@@ -277,7 +338,7 @@ methods.trackEngineFocus = function() {
 		return;
 	}
 	engine.domNode.addEventListener("focus", function() { if(self.editor === ed) { ed.focused = true; } }, false);
-	engine.domNode.addEventListener("blur", function() { if(self.editor === ed) { ed.focused = false; } }, false);
+	engine.domNode.addEventListener("blur", function() { self.noteBlur(engine.domNode); }, false);
 	var active = this.document.activeElement;
 	ed.focused = !!active && (active === engine.domNode || active === engine.iframeNode);
 };
@@ -290,7 +351,14 @@ methods.hideEdited = function() {
 	}
 	var cls = ed.placement === "inside" ? EDITING_OWN_CLASS : EDITING_CLASS;
 	ed.hidden = this.units[ed.id].domNodes.slice();
+	var view = this.document.defaultView;
 	$tw.utils.each(ed.hidden, function(node) {
+		// An edited item collapses its own text to zero size; the editor and the sub-items get the item's sizes back
+		if(cls === EDITING_OWN_CLASS && view && view.getComputedStyle && node.style && node.style.setProperty) {
+			var style = view.getComputedStyle(node);
+			node.style.setProperty("--rr-ol-font-size", style.fontSize);
+			node.style.setProperty("--rr-ol-line-height", style.lineHeight);
+		}
 		dom.setClass(node, cls, true);
 	});
 };
@@ -300,6 +368,10 @@ methods.unhideEdited = function() {
 	$tw.utils.each(ed && ed.hidden || [], function(node) {
 		dom.setClass(node, EDITING_CLASS, false);
 		dom.setClass(node, EDITING_OWN_CLASS, false);
+		if(node.style && node.style.removeProperty) {
+			node.style.removeProperty("--rr-ol-font-size");
+			node.style.removeProperty("--rr-ol-line-height");
+		}
 	});
 	if(ed) {
 		ed.hidden = [];
@@ -314,6 +386,7 @@ methods.closeEditor = function(discard) {
 	this.unhideEdited();
 	this.removeHost();
 	this.editor = null;
+	dom.setClass(this.domNode, IS_EDITING_CLASS, false);
 	if(this.ownsBuffer()) {
 		delete ownersOf(this.wiki)[this.bufferTitle()];
 		if(discard) {
@@ -376,7 +449,14 @@ methods.saveEdit = function(opts) {
 		return false;
 	}
 	var result;
-	if(ed.isNew) {
+	if(ed.isNew && ed.blockType) {
+		result = adapter.insertBlock(current, target.model, target.id, ed.blockType, newSource);
+		if(!result) {
+			this.closeEditor(true);
+			dom.focus(this.domNode);
+			return true;
+		}
+	} else if(ed.isNew) {
 		result = adapter.insertNew(current, target.model, target.id, newSource.replace(/\r?\n/g, utils.eol(current)));
 		if(!result) {
 			// Nothing left to insert (e.g. only the item marker was typed): like a blank new unit
@@ -468,12 +548,8 @@ methods.reattachEditor = function() {
 		this.unhideEdited();
 		return;
 	}
-	var hadFocus = ed.focused,
-		engine = this.editorEngine();
-	ed.caret = null;
-	if(engine && engine.domNode && typeof engine.domNode.selectionStart === "number") {
-		ed.caret = [engine.domNode.selectionStart, engine.domNode.selectionEnd];
-	}
+	var hadFocus = ed.focused;
+	ed.caret = this.editorCaret();
 	this.unhideEdited();
 	this.removeHost();
 	this.placeEditor(hadFocus);
@@ -514,6 +590,13 @@ methods.editorEngine = function() {
 	return found;
 };
 
+// [selectionStart, selectionEnd] of the editor's textarea, or null
+methods.editorCaret = function() {
+	var engine = this.editorEngine();
+	return engine && engine.domNode && typeof engine.domNode.selectionStart === "number" ?
+		[engine.domNode.selectionStart, engine.domNode.selectionEnd] : null;
+};
+
 methods.focusEditor = function() {
 	var engine = this.editorEngine();
 	if(engine && engine.focus && $tw.browser) {
@@ -547,10 +630,24 @@ methods.showNotice = function(name) {
 	ed.host.insertBefore(note, ed.host.firstChild || null);
 };
 
-// Insert a line break at the caret through the engine (keeps undo, height and the buffer in sync)
+/*
+Insert a line break at the caret. The FramedEngine (full editor) takes it as a text operation (keeps undo, height
+and the buffer in sync). The SimpleEngine (compact editor) has no text operations: the line break goes into the
+textarea directly, and an input event lets the engine save the buffer and fix the height.
+*/
 methods.insertNewline = function() {
 	var engine = this.editorEngine();
 	if(!engine || !engine.widget || !engine.widget.handleEditTextOperationMessage) {
+		return;
+	}
+	if(!engine.createTextOperation || !engine.createTextOperation()) {
+		var node = engine.domNode,
+			view = node && node.ownerDocument && node.ownerDocument.defaultView;
+		if(!node || !node.setRangeText || !view) {
+			return;
+		}
+		node.setRangeText("\n", node.selectionStart, node.selectionEnd, "end");
+		node.dispatchEvent(new view.Event("input", {bubbles: true}));
 		return;
 	}
 	engine.widget.handleEditTextOperationMessage({
@@ -577,11 +674,83 @@ methods.handleEditorKeydown = function(event) {
 		this.insertNewline();
 	} else if(this.keyMatches(event, "outline-cancel")) {
 		this.cancelEdit();
+	} else if(this.keyMatches(event, "outline-move-up")) {
+		this.editOperate("move", -1);
+	} else if(this.keyMatches(event, "outline-move-down")) {
+		this.editOperate("move", 1);
+	} else if(this.keyMatches(event, "outline-indent")) {
+		this.editOperate("indent");
+	} else if(this.keyMatches(event, "outline-promote")) {
+		this.editOperate("promote");
+	} else if(this.keyMatches(event, "outline-edit-up")) {
+		this.editStep(-1);
+	} else if(this.keyMatches(event, "outline-edit-down")) {
+		this.editStep(1);
 	} else {
 		return;
 	}
 	event.preventDefault();
 	event.stopPropagation();
+};
+
+/*
+Move the editor to the previous (dir -1) or next (1) unit: save, then edit the neighbour. A refused save (conflict,
+read-only, children) keeps the editor open with its notice. After a blank save the editor goes to the unit at the
+same place when that already is the requested neighbour: the one after a deleted unit (down) or the anchor of an
+empty new unit (up). At the first/last unit the editor reopens on the same unit.
+*/
+methods.editStep = function(dir) {
+	var ed = this.editor;
+	if(!ed) {
+		return false;
+	}
+	var blank = !/\S/.test(this.wiki.getTiddlerText(this.bufferTitle(), "")),
+		stay = blank && (ed.isNew ? dir < 0 : dir > 0);
+	// Step from the edited unit (a new unit: from its anchor), whatever was selected before
+	if(ed.id !== -1 && this.selectedId !== ed.id) {
+		this.select(ed.id);
+	}
+	if(!this.saveEdit()) {
+		return true;
+	}
+	// The save may not be rendered yet: remap now so the neighbour is found at its new position
+	this.ensureCurrent();
+	if(!stay) {
+		this.step(dir);
+	}
+	this.editSelected();
+	return true;
+};
+
+/*
+Tab / Shift-Tab and Alt-Up/Down while editing: like in selection mode, on the edited unit. Save, indent, promote or
+move the unit with its subtree, edit it again (at its new place) with the caret where it was. A refused save keeps the editor. With empty text the key is
+consumed and nothing changes.
+*/
+methods.editOperate = function(name, arg) {
+	var ed = this.editor;
+	if(!ed) {
+		return false;
+	}
+	// Empty text: a new unit has nothing to indent yet, an existing one would be deleted by the save
+	if(!/\S/.test(this.wiki.getTiddlerText(this.bufferTitle(), ""))) {
+		return true;
+	}
+	var caret = this.editorCaret();
+	if(ed.id !== -1 && this.selectedId !== ed.id) {
+		this.select(ed.id);
+	}
+	if(!this.saveEdit()) {
+		return true;
+	}
+	this.operate(name, arg);
+	// The write may not be rendered yet: remap so the unit is edited at its new position
+	this.ensureCurrent();
+	if(this.editSelected() && caret) {
+		this.editor.caret = caret;
+		this.focusEditor();
+	}
+	return true;
 };
 
 // Select-mode Shift-Enter

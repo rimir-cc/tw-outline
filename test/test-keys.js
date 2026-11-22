@@ -11,7 +11,7 @@ Tests for selection, configurable keys and structural operations of the $outline
 describe("outline selection and keys", function() {
 
 	var SEL = "$:/temp/rimir/outline/selection/",
-		KEYS = {up: 38, down: 40, tab: 9, escape: 27, enter: 13};
+		KEYS = {up: 38, down: 40, left: 37, right: 39, tab: 9, escape: 27, enter: 13};
 
 	// Shortcut config (shadows of the plugin) copied into each test wiki
 	function shortcutTiddlers() {
@@ -102,7 +102,8 @@ describe("outline selection and keys", function() {
 		var wiki = makeWiki(),
 			expected = {
 				"outline-up": "Up", "outline-down": "Down", "outline-move-up": "alt-Up", "outline-move-down": "alt-Down",
-				"outline-indent": "Tab", "outline-promote": "shift-Tab", "outline-edit": "shift-Enter",
+				"outline-indent": "Tab", "outline-promote": "shift-Tab", "outline-edit": "Enter", "outline-menu": "shift-Enter",
+				"outline-parent": "Left", "outline-child": "Right", "outline-edit-up": "ctrl-Up", "outline-edit-down": "ctrl-Down",
 				"outline-open": "Enter", "outline-clear": "Escape", "outline-save": "ctrl-Enter",
 				"outline-continue": "Enter", "outline-newline": "shift-Enter", "outline-cancel": "Escape"
 			};
@@ -150,6 +151,65 @@ describe("outline selection and keys", function() {
 		expect(r.widget.selectedId).toBe(1);
 		r.widget.select(2);
 		expect(r.widget.selectedId).toBe(1);
+	});
+
+	it("left/right select the parent and the first child", function() {
+		var r = renderOutline(makeWiki([{title: "T", text: "! H\n\n* a\n** a1\n*** a1x\n* b\n\npara\n\n!! S\n\ns1"}]), "T");
+		r.widget.select(idOf(r, "*** a1x"));
+		expect(key(r, KEYS.left).prevented).toBe(true);
+		expect(selectedSource(r)).toBe("** a1");
+		key(r, KEYS.left);
+		expect(selectedSource(r)).toBe("* a");
+		// A top-level item: the whole list, then the heading
+		key(r, KEYS.left);
+		expect(selectedUnit(r).kind).toBe("list");
+		key(r, KEYS.left);
+		expect(selectedSource(r)).toBe("! H");
+		// At the top: stays, still consumed
+		expect(key(r, KEYS.left).prevented).toBe(true);
+		expect(selectedSource(r)).toBe("! H");
+		// Right mirrors Left: the list, its first item, then down the items
+		key(r, KEYS.right);
+		expect(selectedUnit(r).kind).toBe("list");
+		key(r, KEYS.right);
+		expect(selectedSource(r)).toBe("* a");
+		key(r, KEYS.right);
+		expect(selectedSource(r)).toBe("** a1");
+		key(r, KEYS.right);
+		expect(selectedSource(r)).toBe("*** a1x");
+		key(r, KEYS.right);
+		expect(selectedSource(r)).toBe("*** a1x");
+		// A paragraph in a section: Left is the heading
+		r.widget.select(idOf(r, "s1"));
+		key(r, KEYS.left);
+		expect(selectedSource(r)).toBe("!! S");
+		key(r, KEYS.left);
+		expect(selectedSource(r)).toBe("! H");
+		// Nothing selected: not consumed
+		r.widget.clearSelection();
+		expect(key(r, KEYS.right).prevented).toBe(false);
+	});
+
+	it("enter edits the selected unit; on a transclusion it opens the target", function() {
+		var r = renderOutline(makeWiki([{title: "T", text: "* a\n\n{{X}}"}, {title: "X", text: "x"}]), "T");
+		r.widget.select(idOf(r, "* a"));
+		expect(key(r, KEYS.enter).prevented).toBe(true);
+		expect(r.widget.editor).not.toBe(null);
+		expect(r.widget.editor.id).toBe(idOf(r, "* a"));
+		r.widget.cancelEdit();
+		var opened = [];
+		r.widget.openTarget = function(t) { opened.push(t); return true; };
+		r.widget.select(idOf(r, "{{X}}"));
+		key(r, KEYS.enter);
+		expect(opened).toEqual(["X"]);
+		expect(r.widget.editor).toBe(null);
+		// Shift-Enter: the block menu; its first entry edits the line
+		key(r, KEYS.enter, {shift: true});
+		expect(r.widget.menu).not.toBe(null);
+		expect(r.widget.menu.entries[0].action).toBe("edit");
+		key(r, KEYS.enter);
+		expect(r.widget.menu).toBe(null);
+		expect(r.widget.editor).not.toBe(null);
 	});
 
 	it("escape clears, events already handled are ignored", function() {
@@ -334,7 +394,7 @@ describe("outline selection and keys", function() {
 	it("outline-open acts only on a transclusion unit", function() {
 		var r = renderOutline(makeWiki([{title: "T", text: "* a\n\n{{X}}"}, {title: "X", text: "! x"}]), "T");
 		r.widget.select(idOf(r, "* a"));
-		expect(key(r, KEYS.enter).prevented).toBe(false);
+		expect(r.widget.openTransclusion()).toBe(false);
 		r.widget.select(idOf(r, "{{X}}"));
 		expect(key(r, KEYS.enter).prevented).toBe(true);
 	});

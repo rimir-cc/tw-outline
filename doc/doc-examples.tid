@@ -30,7 +30,7 @@ Select //bread//, press Alt-Down: `bread` and `rye` swap places with `eggs`. Pre
 
 !! Save and new
 
-Select a list item, Shift-Enter, type, press Enter: the item is saved and a new item with the same marker opens after the item's whole subtree. Leave it empty and press Ctrl-Enter or Escape: nothing is written.
+Select a list item, Enter, type, press Enter: the item is saved and a new item with the same marker opens after the item's whole subtree. Leave it empty and press Ctrl-Enter or Escape: nothing is written.
 
 !! Transclusions
 

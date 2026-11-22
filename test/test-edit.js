@@ -24,7 +24,7 @@ describe("outline edit", function() {
 
 	it("replace keeps rest", function() {
 		var text = "* a\n** a1\n* b", m = build(text), u = m.units[idOf(m, "* a")],
-			r = fmt.replace(text, m, u.id, "* changed");
+			r = fmt.replace(text, m, u.id, "changed");
 		expect(r.text).toBe("* changed\n** a1\n* b");
 		expect(r.select).toBe(0);
 		fixtures.assertOnlyRangesChanged(text, r.text, [[u.start, u.end]], expect);
@@ -32,7 +32,111 @@ describe("outline edit", function() {
 
 	it("editSource returns own source", function() {
 		var text = "* a\n** a1\n* b", m = build(text);
-		expect(fmt.editSource(text, m, idOf(m, "* a"))).toBe("* a");
+		expect(fmt.editSource(text, m, idOf(m, "* a"))).toBe("a");
+	});
+
+	it("editor shows and replaces content only: item markers and heading prefixes stay", function() {
+		var text = "! Head\n\n* a\n**#  deep\n;term\n:def\n\npara", m = build(text);
+		expect(fmt.editSource(text, m, idOf(m, "! Head"))).toBe("Head");
+		expect(fmt.editSource(text, m, idOf(m, "**#  deep"))).toBe("deep");
+		expect(fmt.editSource(text, m, idOf(m, ";term"))).toBe("term");
+		expect(fmt.editSource(text, m, idOf(m, "para"))).toBe("para");
+		expect(fmt.replace(text, m, idOf(m, "! Head"), "New").text).toBe("! New\n\n* a\n**#  deep\n;term\n:def\n\npara");
+		expect(fmt.replace(text, m, idOf(m, "**#  deep"), "x").text).toBe("! Head\n\n* a\n**#  x\n;term\n:def\n\npara");
+		expect(fmt.replace(text, m, idOf(m, ":def"), "d2").text).toBe("! Head\n\n* a\n**#  deep\n;term\n:d2\n\npara");
+		// Content that looks like markup stays content; the own marker typed out of habit is not doubled
+		expect(fmt.replace(text, m, idOf(m, "* a"), "*bold*").text).toContain("\n* *bold*\n");
+		expect(fmt.replace(text, m, idOf(m, "* a"), "* b").text).toContain("\n* b\n");
+	});
+
+	it("line breaks in items and headings are stored as <br>, shown as line breaks", function() {
+		var text = "! H\n\n* a\n** a1\n* b\n\npara", m = build(text);
+		var r = fmt.replace(text, m, idOf(m, "* a"), "a\nsecond\r\nthird");
+		expect(r.text).toBe("! H\n\n* a<br>second<br>third\n** a1\n* b\n\npara");
+		// The list keeps its structure
+		var m2 = build(r.text);
+		expect(m2.units.length).toBe(m.units.length);
+		expect(fmt.editSource(r.text, m2, idOf(m2, "* a<br>second<br>third"))).toBe("a\nsecond\nthird");
+		expect(fmt.editSource("* x<br/>y<BR />z", build("* x<br/>y<BR />z"), 1)).toBe("x\ny\nz");
+		// Headings too; leading/trailing line breaks are dropped
+		expect(fmt.replace(text, m, idOf(m, "! H"), "H\nsub\n").text).toBe("! H<br>sub\n\n* a\n** a1\n* b\n\npara");
+		// A new item
+		expect(fmt.insertNew(text, m, idOf(m, "* b"), "n1\nn2").text).toBe("! H\n\n* a\n** a1\n* b\n* n1<br>n2\n\npara");
+		// Paragraphs keep real line breaks
+		expect(fmt.replace(text, m, idOf(m, "para"), "p1\np2").text).toBe("! H\n\n* a\n** a1\n* b\n\np1\np2");
+		// Single-line units: Enter stays save-and-continue
+		expect(fmt.isMultiline(m2, idOf(m2, "* a<br>second<br>third"))).toBe(false);
+	});
+
+	describe("insertBlock", function() {
+		it("after a block, a list or a heading's section", function() {
+			var text = "! H\n\npara\n\n* a\n** a1\n\n! I", m = build(text);
+			expect(fmt.insertBlock(text, m, idOf(m, "para"), "heading2", "New").text).toBe("! H\n\npara\n\n!! New\n\n* a\n** a1\n\n! I");
+			var list = m.units.filter(function(u) { return u.kind === "list"; })[0].id;
+			expect(fmt.insertBlock(text, m, list, "paragraph", "p2").text).toBe("! H\n\npara\n\n* a\n** a1\n\np2\n\n! I");
+			// A heading: a new heading goes after its whole section, other blocks right after the heading line
+			expect(fmt.insertBlock(text, m, idOf(m, "! H"), "heading1", "G").text).toBe("! H\n\npara\n\n* a\n** a1\n\n! G\n\n! I");
+			expect(fmt.insertBlock(text, m, idOf(m, "! H"), "bulleted", "first").text).toBe("! H\n\n* first\n\npara\n\n* a\n** a1\n\n! I");
+			var r = fmt.insertBlock(text, m, idOf(m, "! I"), "code", "x\ny");
+			expect(r.text).toBe(text + "\n\n```\nx\ny\n```");
+			expect(r.select).toBe(text.length + 2);
+			expect(r.kind).toBe("block");
+			expect(fmt.insertBlock(text, m, idOf(m, "para"), "numbered", "n1\nn2").text).toContain("\n\n# n1<br>n2\n\n");
+			expect(fmt.insertBlock(text, m, idOf(m, "para"), "quote", "q").kind).toBe("item");
+			// Blank content, an item anchor: nothing
+			expect(fmt.insertBlock(text, m, idOf(m, "para"), "paragraph", "  ")).toBeNull();
+			expect(fmt.insertBlock(text, m, idOf(m, "* a"), "paragraph", "x")).toBeNull();
+		});
+	});
+
+	describe("convert", function() {
+		function conv(text, source, type) {
+			var m = build(text), id = typeof source === "number" ? source : idOf(m, source);
+			return fmt.convert(text, m, id, type);
+		}
+		it("offers the types that fit the unit", function() {
+			var text = "! H\n\npara\n\n* a\n** a1\n\n```\nc\n```\n\n<div>\n\nx\n\n</div>", m = build(text);
+			expect(fmt.convertTypes(m, idOf(m, "para"))).toEqual(["heading1", "heading2", "heading3", "bulleted", "numbered", "quote", "code"]);
+			expect(fmt.convertTypes(m, idOf(m, "! H"))).toEqual(["paragraph", "bulleted", "numbered", "quote", "code"]);
+			expect(fmt.convertTypes(m, idOf(m, "* a"))).toEqual(["numbered"]);
+			expect(fmt.convertTypes(m, idOf(m, "```\nc\n```"))).toEqual(["paragraph", "bulleted", "numbered", "quote"]);
+			var div = m.units.filter(function(u) { return u.kind === "container"; })[0].id;
+			expect(fmt.convertTypes(m, div)).toEqual([]);
+		});
+		it("paragraphs, headings and code blocks are rewritten from their content", function() {
+			expect(conv("para\n\nnext", "para", "heading2").text).toBe("!! para\n\nnext");
+			expect(conv("! Head\n\nnext", "! Head", "paragraph").text).toBe("Head\n\nnext");
+			expect(conv("a\nb\n\nnext", "a\nb", "bulleted").text).toBe("* a<br>b\n\nnext");
+			expect(conv("line1\nline2", "line1\nline2", "code").text).toBe("```\nline1\nline2\n```");
+			expect(conv("```js\nx = 1\n```", "```js\nx = 1\n```", "paragraph").text).toBe("x = 1");
+			var r = conv("p", "p", "numbered");
+			expect(r.text).toBe("# p");
+			expect(r.kind).toBe("item");
+		});
+		it("neighbours stay apart: a converted heading does not merge with the paragraph after it", function() {
+			var r = conv("! H\npara", "! H", "paragraph");
+			expect(r.text).toBe("H\n\npara");
+			expect(conv("* a\n```\nc\n```", "```\nc\n```", "paragraph").text).toBe("* a\n\nc");
+		});
+		it("a bullet switches with its siblings of the same level; their sub-items follow", function() {
+			var text = "* a\n** a1\n* b\n** b1\n*** b1x";
+			expect(conv(text, "* b", "numbered").text).toBe("# a\n#* a1\n# b\n#* b1\n#** b1x");
+			expect(conv(text, "** b1", "numbered").text).toBe("* a\n** a1\n* b\n*# b1\n*#* b1x");
+			// Only the siblings under the same parent
+			expect(conv("* a\n** a1\n* b\n** b1", "** a1", "numbered").text).toBe("* a\n*# a1\n* b\n** b1");
+		});
+		it("a whole list switches at all levels", function() {
+			var text = "* a\n** a1\n*# a2", m = build(text),
+				list = m.units.filter(function(u) { return u.kind === "list"; })[0].id;
+			var r = fmt.convert(text, m, list, "numbered");
+			expect(r.text).toBe("# a\n## a1\n## a2");
+			expect(r.kind).toBe("list");
+		});
+		it("types that are not offered do nothing", function() {
+			expect(conv("para", "para", "paragraph")).toBeNull();
+			expect(conv("* a", "* a", "bulleted")).toBeNull();
+			expect(conv("* a", "* a", "heading1")).toBeNull();
+		});
 	});
 
 	it("new item after subtree", function() {

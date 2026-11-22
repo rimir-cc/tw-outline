@@ -2,14 +2,19 @@ title: $:/config/ShortcutInfo/
 
 outline-up: Outline: select the previous unit
 outline-down: Outline: select the next unit
+outline-parent: Outline: select the parent unit (item, list, heading)
+outline-child: Outline: select the first child unit
 outline-move-up: Outline: move the selected unit and its subtree above its previous sibling
 outline-move-down: Outline: move the selected unit and its subtree below its next sibling
 outline-indent: Outline: indent the selected unit and its subtree by one level
 outline-promote: Outline: promote the selected unit and its subtree by one level
 outline-edit: Outline: edit the selected unit in place
+outline-menu: Outline: block menu - insert a new block after the selected unit, or turn it into another type
 outline-open: Outline: open the transcluded tiddler of the selected unit in outline mode
 outline-clear: Outline: clear the selection
 outline-save: Outline editor: save the edit
 outline-continue: Outline editor: save and start a new unit below (list items, headings, paragraphs)
 outline-newline: Outline editor: insert a line break
 outline-cancel: Outline editor: discard the edit
+outline-edit-up: Outline editor: save and edit the previous unit
+outline-edit-down: Outline editor: save and edit the next unit

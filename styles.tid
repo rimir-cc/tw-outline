@@ -4,16 +4,35 @@ tags: $:/tags/Stylesheet
 \rules only filteredtranscludeinline transcludeinline macrodef macrocallinline
 
 .rr-ol {
+	position: relative;
 	outline: none;
 }
 
-.rr-ol-selected {
+.rr-ol-selected,
+.rr-ol-selbox {
 	outline: 1px solid <<colour primary>>;
 	outline-offset: 2px;
 }
 
+/* A selected list item with sub-items: the frame is drawn by .rr-ol-selbox around the item's own lines only */
+.rr-ol-selected.rr-ol-selected-own {
+	outline: none;
+}
+
+.rr-ol-selbox {
+	position: absolute;
+	pointer-events: none;
+}
+
+/* An open editor marks the place itself */
+.rr-ol-is-editing .rr-ol-selected,
+.rr-ol-is-editing .rr-ol-selbox {
+	outline: none;
+}
+
 /* Another view of the same tiddler shows the selection without keyboard focus */
-.rr-ol:not(:focus-within) .rr-ol-selected {
+.rr-ol:not(:focus-within) .rr-ol-selected,
+.rr-ol:not(:focus-within) .rr-ol-selbox {
 	outline-color: <<colour muted-foreground>>;
 }
 
@@ -21,10 +40,17 @@ tags: $:/tags/Stylesheet
 	display: none;
 }
 
-/* Edited list item: the editor host is its first child; hide only the item's own content (and its
-   marker), keep its nested sub-items and the editor visible */
+/* Edited list item: the editor host is its first child. The item's own content (and its marker) takes no
+   space: its elements are not displayed, its bare text has zero size. The editor and the nested sub-items get
+   the item's font size and line height back (set by the editor as custom properties). */
 .rr-ol-editing-own {
 	visibility: hidden;
+	font-size: 0;
+	line-height: 0;
+}
+
+.rr-ol-editing-own > :not(.rr-ol-editor-host):not(ul):not(ol):not(dl):not(blockquote) {
+	display: none;
 }
 
 .rr-ol-editing-own > .rr-ol-editor-host,
@@ -33,6 +59,8 @@ tags: $:/tags/Stylesheet
 .rr-ol-editing-own > dl,
 .rr-ol-editing-own > blockquote {
 	visibility: visible;
+	font-size: var(--rr-ol-font-size);
+	line-height: var(--rr-ol-line-height);
 }
 
 .rr-ol-tmark {
@@ -64,8 +92,65 @@ tags: $:/tags/Stylesheet
 	margin: 0.2em 0;
 }
 
+/* Compact editor: one line that grows with its content, looks like an input field */
+.rr-ol-editor-compact {
+	display: block;
+	box-sizing: border-box;
+	width: 100%;
+	margin: 0;
+	padding: 1px 4px;
+	font: inherit;
+	line-height: inherit;
+	color: <<colour foreground>>;
+	background: <<colour background>>;
+	border: 1px solid <<colour primary>>;
+	border-radius: 3px;
+	resize: none;
+	overflow: hidden;
+}
+
 .rr-ol-editor-host .tc-editor-toolbar {
 	margin-bottom: 0.2em;
+}
+
+/* Block menu (Shift-Enter) */
+.rr-ol-menu {
+	position: absolute;
+	z-index: 1000;
+	min-width: 12em;
+	max-height: 22em;
+	overflow-y: auto;
+	padding: 0.25em 0;
+	background: <<colour dropdown-background>>;
+	border: 1px solid <<colour dropdown-border>>;
+	border-radius: 4px;
+	box-shadow: 1px 1px 5px rgba(0, 0, 0, 0.15);
+	font-size: 0.9em;
+	line-height: 1.5;
+}
+
+.rr-ol-menu-group {
+	padding: 0.2em 0.8em 0.1em;
+	font-size: 0.8em;
+	color: <<colour muted-foreground>>;
+	text-transform: uppercase;
+}
+
+.rr-ol-menu-item {
+	padding: 0.1em 0.8em 0.1em 1.2em;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.rr-ol-menu-item.rr-ol-menu-active,
+.rr-ol-menu-item:hover {
+	background: <<colour dropdown-tab-background-selected>>;
+	color: <<colour foreground>>;
+}
+
+.rr-ol-menu-item.rr-ol-menu-active {
+	background: <<colour primary>>;
+	color: <<colour background>>;
 }
 
 .rr-ol-notice {

@@ -26,7 +26,8 @@ trailing line breaks and extends lists to their subtree end.
 var Widget = require("$:/core/modules/widgets/widget.js").widget,
 	buildModel = require("$:/plugins/rimir/outline/model.js").buildModel,
 	keys = require("$:/plugins/rimir/outline/outline-keys.js"),
-	editor = require("$:/plugins/rimir/outline/outline-editor.js");
+	editor = require("$:/plugins/rimir/outline/outline-editor.js"),
+	menu = require("$:/plugins/rimir/outline/outline-menu.js");
 
 var MARKER_TIDDLER = "$:/plugins/rimir/outline/ui/transclusion-marker",
 	LIST_TAGS = {ul: true, ol: true, dl: true, blockquote: true},
@@ -45,6 +46,8 @@ OutlineWidget.prototype = new Widget();
 keys.install(OutlineWidget.prototype);
 // In-place editor: startEdit, saveEdit, cancelEdit, reattachEditor, handleEditorKeydown, openTarget
 editor.install(OutlineWidget.prototype);
+// Block menu (Shift-Enter): openMenu, closeMenu, handleMenuKeydown
+menu.install(OutlineWidget.prototype);
 
 OutlineWidget.prototype.render = function(parent, nextSibling) {
 	this.parentDomNode = parent;
@@ -56,11 +59,22 @@ OutlineWidget.prototype.render = function(parent, nextSibling) {
 	var self = this;
 	domNode.addEventListener("keydown", function(event) { self.handleKeydown(event); }, false);
 	domNode.addEventListener("click", function(event) { self.handleClick(event); }, false);
+	// The block menu closes when the focus leaves the outline
+	domNode.addEventListener("focusout", function(event) {
+		if(!event.relatedTarget || !domNode.contains(event.relatedTarget)) {
+			self.closeMenu();
+		}
+	}, false);
 	parent.insertBefore(domNode, nextSibling);
 	this.renderChildren(domNode, null);
 	this.domNodes.push(domNode);
 	this.domNode = domNode;
 	this.mapUnits();
+	// Layout changes (window width, images, the editor) move the item selection frame
+	if($tw.browser && this.document.defaultView && this.document.defaultView.ResizeObserver) {
+		this.resizeObserver = new this.document.defaultView.ResizeObserver(function() { self.drawSelectionBox(); });
+		this.resizeObserver.observe(domNode);
+	}
 };
 
 OutlineWidget.prototype.execute = function() {
@@ -70,6 +84,8 @@ OutlineWidget.prototype.execute = function() {
 	this.markers = [];
 	this.selectedId = -1;
 	this.selectedNodes = [];
+	this.selectionBox = null;
+	this.menu = null;
 	this.editor = null;
 	this.pendingContinue = null;
 	this.markerHtml = null;
@@ -103,6 +119,11 @@ Remove the editor (it is not part of the children). A changed buffer is kept and
 this tiddler (an ancestor re-render destroys this widget); an unchanged one is discarded (releaseEditor).
 */
 OutlineWidget.prototype.destroy = function(options) {
+	if(this.resizeObserver) {
+		this.resizeObserver.disconnect();
+		this.resizeObserver = null;
+	}
+	this.closeMenu();
 	this.releaseEditor();
 	Widget.prototype.destroy.call(this, options);
 };
@@ -228,11 +249,13 @@ OutlineWidget.prototype.matchUnits = function() {
 	if(!body) {
 		return result;
 	}
+	var lastStart = 0;
 	function walk(widget) {
 		$tw.utils.each(widget.children, function(child) {
-			var unit = self.matchWidget(child, byAnchor, used);
+			var unit = self.matchWidget(child, byAnchor, used) || self.matchOverride(child, used, lastStart);
 			if(unit) {
 				used[unit.id] = true;
+				lastStart = unit.start;
 				result[unit.id] = elementNodes(child);
 				if(DESCEND_KINDS[unit.kind]) {
 					walk(child);
@@ -244,6 +267,28 @@ OutlineWidget.prototype.matchUnits = function() {
 	}
 	walk(body);
 	return result;
+};
+
+/*
+A core widget overridden by a custom widget definition (for example `\widget $codeblock` of a plugin) is built as a
+transclude of the variable "$<type>" without source positions. The walk is in document order, so it stands for the
+next unmatched unit of that type at or after the last matched one. Its rendered elements become the unit's nodes;
+its inside stays opaque.
+*/
+OutlineWidget.prototype.matchOverride = function(widget, used, after) {
+	var node = widget.parseTreeNode,
+		name = widget.transcludeVariable;
+	if(!node || node.type !== "transclude" || !name || name.charAt(0) !== "$" || name.length < 2) {
+		return null;
+	}
+	var type = name.substring(1),
+		units = this.model.units;
+	for(var i = 0; i < units.length; i++) {
+		if(!used[units[i].id] && units[i].tag === type && units[i].start >= after) {
+			return units[i];
+		}
+	}
+	return null;
 };
 
 // First descendant transclude widget that renders this tiddler

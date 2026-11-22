@@ -2,14 +2,19 @@ title: $:/config/shortcuts/
 
 outline-up: Up
 outline-down: Down
+outline-parent: Left
+outline-child: Right
 outline-move-up: alt-Up
 outline-move-down: alt-Down
 outline-indent: Tab
 outline-promote: shift-Tab
-outline-edit: shift-Enter
+outline-edit: Enter
+outline-menu: shift-Enter
 outline-open: Enter
 outline-clear: Escape
 outline-save: ctrl-Enter
 outline-continue: Enter
 outline-newline: shift-Enter
 outline-cancel: Escape
+outline-edit-up: ctrl-Up
+outline-edit-down: ctrl-Down

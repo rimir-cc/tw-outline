@@ -30,6 +30,10 @@ Not yet. Moves stay inside the parent: at the first or last child, Alt-Up/Down d
 
 No. `<$list>`, `<$reveal>`, macro and procedure calls are single units: select, move or edit their source as a whole. Only plain HTML containers are opened.
 
+!! Plugins that replace core widgets (copy buttons on code blocks, ...)?
+
+A plugin can replace a core widget with its own `\widget` definition, for example `$codeblock` (kookma's utility plugin adds a caption and a copy button). The replacement renders without source positions; outline assigns it to the next unit of that type in document order, and frames, edits and moves it like any other block. What it renders inside stays untouched.
+
 !! Why can't I select a block?
 
 Units that render nothing (for example a procedure call with empty output) have no DOM node and cannot be selected.
@@ -60,9 +64,9 @@ A comment (or other text that is not a unit) between the two blocks is kept and 
 
 A move only swaps a unit with its neighbour inside the same parent, and only with a neighbour of the same class (heading with heading of the same level, item with item of the same level, other blocks with other blocks). Before writing, outline re-parses the result; if the swap would change the units (for example a heading section whose last paragraph would merge with the next block), the move is refused and the text stays unchanged. Add a blank line between the blocks by hand and try again.
 
-!! Why do Tab and Alt-Up/Down do nothing while I edit?
+!! Do Tab and Alt-Up/Down work while I edit?
 
-Structural keys are blocked while the view has an open editor: a move could rewrite the unit you are editing. Save or cancel first.
+Yes. They save your text, indent, promote or move the unit with its subtree, and keep editing it at its new place with the cursor where it was. With empty text they do nothing.
 
 !! My CSS for `.tc-tiddler-body > p` stopped working
 
@@ -71,6 +75,18 @@ While outline mode is on, the body is wrapped in `div.rr-ol`, so child selectors
 !! Do `AI:` lines of llm-inline fire?
 
 No. Outline writes bypass `th-saving-tiddler`, which llm-inline listens to. `AI:` lines typed in outline mode do not fire; they do after a normal editor save.
+
+!! Why doesn't the editor show the `*` or `!`?
+
+The editor edits a unit's content. The list marker and the heading level are structure: change them with Tab/Shift-Tab. If you type the item's own marker at the start anyway (for example `* ` in a `*` item), it is dropped instead of doubled.
+
+!! How do I put a line break into a bullet?
+
+Shift-Enter in the editor. In wikitext a list item (and a heading) is one source line, and a real line break would end it: the next line would become a paragraph that swallows the following items. So line breaks in items and headings are saved as `<br>`, and an existing `<br>` shows as a line break when you edit. Enter stays //save and new item//. Paragraphs and other blocks keep real line breaks.
+
+!! Why does switching one bullet to numbered switch its neighbours too?
+
+In wikitext the list type is the marker character, and items of one level with different characters do not form one list: one numbered item among bullets would cut the list into three. So //Turn into// switches all items of that level under the same parent; their sub-items keep their own type.
 
 !! Do editor plugins work?
 

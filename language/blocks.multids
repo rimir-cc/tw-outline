@@ -1,0 +1,13 @@
+title: $:/plugins/rimir/outline/language/block/
+
+paragraph: Paragraph
+heading1: Heading 1
+heading2: Heading 2
+heading3: Heading 3
+bulleted: Bulleted list
+numbered: Numbered list
+quote: Quote
+code: Code block
+edit: Edit this line
+group-insert: Insert after
+group-convert: Turn into

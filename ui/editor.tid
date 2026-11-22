@@ -1,8 +1,12 @@
 title: $:/plugins/rimir/outline/ui/editor
-description: In-place editor of the $outline widget. Variables: outline-edit-tiddler (the buffer), outline-edit-focus (yes/no: focus on render), len (buffer text length at start, caret goes to the end)
+description: In-place editor of the $outline widget. Compact (one-line textarea that grows, no toolbar) unless $:/config/rimir/outline/full-editor is yes (full text editor with toolbar). Variables: outline-edit-tiddler (the buffer), outline-edit-focus (yes/no: focus on render), len (buffer text length at start, caret goes to the end), outline-edit-placeholder (type of a new block, or empty)
 
 \function config-visibility-title() [[$:/config/EditorToolbarButtons/Visibility/]addsuffix<currentTiddler>]
 \whitespace trim
 <$set name="targetTiddler" value=<<outline-edit-tiddler>>>
-<$edit tiddler=<<outline-edit-tiddler>> tag="textarea" class="tc-edit-texteditor rr-ol-editor" focus=<<outline-edit-focus>> autoHeight="yes" minHeight="1em" focusSelectFromStart=<<len>> focusSelectFromEnd="0" cancelPopups="yes"><$list filter="[all[shadows+tiddlers]tag[$:/tags/EditorToolbar]!has[draft.of]]"><$reveal type="nomatch" state=<<config-visibility-title>> text="hide" class="tc-text-editor-toolbar-item-wrapper"><$transclude tiddler="$:/core/ui/EditTemplate/body/toolbar/button" mode="inline"/></$reveal></$list><$list filter="[all[shadows+tiddlers]tag[$:/tags/EditorTools]!has[draft.of]]"><$list filter={{!!condition}} variable="list-condition"><$transclude/></$list></$list></$edit>
+<%if [{$:/config/rimir/outline/full-editor}match[yes]] %>
+<$edit tiddler=<<outline-edit-tiddler>> tag="textarea" class="tc-edit-texteditor rr-ol-editor" focus=<<outline-edit-focus>> autoHeight="yes" minHeight="1em" focusSelectFromStart=<<len>> focusSelectFromEnd="0" placeholder=<<outline-edit-placeholder>> cancelPopups="yes"><$list filter="[all[shadows+tiddlers]tag[$:/tags/EditorToolbar]!has[draft.of]]"><$reveal type="nomatch" state=<<config-visibility-title>> text="hide" class="tc-text-editor-toolbar-item-wrapper"><$transclude tiddler="$:/core/ui/EditTemplate/body/toolbar/button" mode="inline"/></$reveal></$list><$list filter="[all[shadows+tiddlers]tag[$:/tags/EditorTools]!has[draft.of]]"><$list filter={{!!condition}} variable="list-condition"><$transclude/></$list></$list></$edit>
+<%else%>
+<$edit tiddler=<<outline-edit-tiddler>> tag="textarea" class="rr-ol-editor rr-ol-editor-compact" rows="1" focus=<<outline-edit-focus>> autoHeight="yes" minHeight="1em" focusSelectFromStart=<<len>> focusSelectFromEnd="0" placeholder=<<outline-edit-placeholder>> cancelPopups="yes"/>
+<%endif%>
 </$set>

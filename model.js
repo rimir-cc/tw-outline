@@ -246,6 +246,10 @@ Indent/promote keep the unit count and order; the units of the operated subtree 
 their level by exactly +1/-1, all others keep it. Anything else is refused by the caller (no write).
 */
 exports.checkOp = function(wiki, before, id, name, newText, title) {
+	// The adapter's convert checks its own result (a conversion changes kinds and the unit count)
+	if(name === "convert") {
+		return true;
+	}
 	var after = exports.buildModel(wiki, newText, title),
 		u = before.units[id];
 	if(!u || after.units.length !== before.units.length) {
@@ -257,6 +261,7 @@ exports.checkOp = function(wiki, before, id, name, newText, title) {
 	if(name === "move") {
 		return signature(after) === signature(before);
 	}
+
 	if(name !== "indent" && name !== "promote") {
 		return false;
 	}

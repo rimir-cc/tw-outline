@@ -142,11 +142,299 @@ describe("outline editor", function() {
 		expect(li.children[0]).toBe(ed.host);
 		expect(hasClass(li, "rr-ol-editing-own")).toBe(true);
 		expect(hasClass(li, "rr-ol-editing")).toBe(false);
-		expect(r.buffer()).toBe("* a");
+		expect(r.buffer()).toBe("a");
 		// The editor template rendered an edit widget for the buffer
 		var textareas = elements(ed.host).filter(function(el) { return el.tag === "textarea"; });
 		expect(textareas.length).toBe(1);
-		expect(textareas[0].textContent).toBe("* a");
+		expect(textareas[0].textContent).toBe("a");
+	});
+
+	it("compact editor by default, full editor with toolbar when configured", function() {
+		function editorOf(r) {
+			r.widget.startEdit(r.idOf("* a"));
+			var els = elements(r.widget.editor.host);
+			return {
+				textarea: els.filter(function(el) { return el.tag === "textarea"; })[0],
+				toolbar: els.some(function(el) { return hasClass(el, "tc-editor-toolbar"); })
+			};
+		}
+		var compact = editorOf(render("* a"));
+		expect(hasClass(compact.textarea, "rr-ol-editor-compact")).toBe(true);
+		expect(compact.toolbar).toBe(false);
+		var full = editorOf(render("* a", [{title: "$:/config/rimir/outline/full-editor", text: "yes"}]));
+		// The fake DOM renders no toolbar (the browser tests check it); the full editor's textarea class differs
+		expect(hasClass(full.textarea, "tc-edit-texteditor")).toBe(true);
+		expect(hasClass(full.textarea, "rr-ol-editor-compact")).toBe(false);
+	});
+
+	describe("ctrl-up/down move the editor", function() {
+
+		function key(r, keyCode) { return editorKey(r, keyCode, {ctrl: true}); }
+		function edited(r) { return r.widget.model.text.substring(r.widget.units[r.widget.editor.id].unit.start, r.widget.units[r.widget.editor.id].unit.end); }
+
+		it("saves and edits the next and previous unit, sub-items included", function() {
+			var r = render("* a\n** a1\n* b");
+			r.widget.startEdit(r.idOf("* a"));
+			r.type("A");
+			var ev = key(r, 40);
+			expect(ev.prevented).toBe(true);
+			expect(r.text()).toBe("* A\n** a1\n* b");
+			expect(edited(r)).toBe("** a1");
+			expect(r.buffer()).toBe("a1");
+			key(r, 40);
+			expect(edited(r)).toBe("* b");
+			key(r, 38);
+			key(r, 38);
+			expect(edited(r)).toBe("* A");
+		});
+
+		it("at the edges the editor stays on the unit", function() {
+			var r = render("* a\n* b");
+			r.widget.startEdit(r.idOf("* b"));
+			key(r, 40);
+			expect(edited(r)).toBe("* b");
+		});
+
+		it("unchanged edits write nothing", function() {
+			var r = render("* a\n* b"),
+				before = r.wiki.getTiddler("T").fields.modified;
+			r.widget.startEdit(r.idOf("* a"));
+			key(r, 40);
+			expect(edited(r)).toBe("* b");
+			expect(r.wiki.getTiddler("T").fields.modified).toBe(before);
+		});
+
+		it("a blanked unit is deleted; down edits the unit that took its place", function() {
+			var r = render("* a\n* b\n* c");
+			r.widget.startEdit(r.idOf("* b"));
+			r.type("");
+			key(r, 40);
+			expect(r.text()).toBe("* a\n* c");
+			expect(edited(r)).toBe("* c");
+		});
+
+		it("an empty new unit: up edits its anchor", function() {
+			var r = render("* a\n* b");
+			r.widget.startEdit(r.idOf("* a"), {isNew: true});
+			key(r, 38);
+			expect(r.text()).toBe("* a\n* b");
+			expect(edited(r)).toBe("* a");
+		});
+
+		it("a refused save keeps the editor", function() {
+			var r = render("* a\n** a1\n* b");
+			r.widget.startEdit(r.idOf("* a"));
+			r.type("");
+			key(r, 40);
+			expect(r.widget.editor).not.toBe(null);
+			expect(r.text()).toBe("* a\n** a1\n* b");
+		});
+	});
+
+	describe("tab/shift-tab while editing", function() {
+
+		function tab(r, shift) { return editorKey(r, 9, {shift: !!shift}); }
+		function edited(r) {
+			var u = r.widget.units[r.widget.editor.id].unit;
+			return r.widget.model.text.substring(u.start, u.end);
+		}
+
+		it("saves, indents the unit with its subtree and keeps editing it", function() {
+			var r = render("* a\n* b\n** b1\n* c");
+			r.widget.startEdit(r.idOf("* b"));
+			r.type("B");
+			expect(tab(r).prevented).toBe(true);
+			expect(r.text()).toBe("* a\n** B\n*** b1\n* c");
+			expect(r.widget.editor).not.toBe(null);
+			expect(edited(r)).toBe("** B");
+			expect(r.buffer()).toBe("B");
+			tab(r, true);
+			expect(r.text()).toBe("* a\n* B\n** b1\n* c");
+			expect(edited(r)).toBe("* B");
+		});
+
+		it("alt-up/down save, move the unit with its subtree and keep editing it", function() {
+			var r = render("* a\n* b\n** b1\n* c");
+			r.widget.startEdit(r.idOf("* b"));
+			r.type("B");
+			var ev = {keyCode: 40, shiftKey: false, altKey: true, ctrlKey: false, metaKey: false,
+				target: r.widget.editor.host, defaultPrevented: false, prevented: false,
+				preventDefault: function() { this.prevented = true; }, stopPropagation: function() {}};
+			r.widget.handleEditorKeydown(ev);
+			expect(ev.prevented).toBe(true);
+			expect(r.text()).toBe("* a\n* c\n* B\n** b1");
+			expect(edited(r)).toBe("* B");
+			expect(r.buffer()).toBe("B");
+			ev.keyCode = 38; ev.prevented = false;
+			r.widget.handleEditorKeydown(ev);
+			r.widget.handleEditorKeydown(ev);
+			expect(r.text()).toBe("* B\n** b1\n* a\n* c");
+			expect(edited(r)).toBe("* B");
+		});
+
+		it("headings carry their section", function() {
+			var r = render("! A\n\n! B\n\ntext");
+			r.widget.startEdit(r.idOf("! B"));
+			tab(r);
+			expect(r.text()).toBe("! A\n\n!! B\n\ntext");
+			expect(edited(r)).toBe("!! B");
+		});
+
+		it("no previous sibling: nothing changes, the editor stays", function() {
+			var r = render("* a\n* b"),
+				before = r.wiki.getTiddler("T");
+			r.widget.startEdit(r.idOf("* a"));
+			expect(tab(r).prevented).toBe(true);
+			expect(r.wiki.getTiddler("T")).toBe(before);
+			expect(edited(r)).toBe("* a");
+		});
+
+		it("empty text: consumed, nothing deleted", function() {
+			var r = render("* a\n* b");
+			r.widget.startEdit(r.idOf("* b"));
+			r.type("");
+			expect(tab(r).prevented).toBe(true);
+			expect(r.text()).toBe("* a\n* b");
+			expect(r.widget.editor).not.toBe(null);
+		});
+
+		it("a new unit with text is inserted, then indented", function() {
+			var r = render("* a\n* b");
+			r.widget.startEdit(r.idOf("* a"), {isNew: true});
+			r.type("n");
+			tab(r);
+			expect(r.text()).toBe("* a\n** n\n* b");
+			expect(edited(r)).toBe("** n");
+		});
+	});
+
+	describe("block menu", function() {
+
+		function press(r, keyCode, mods) {
+			mods = mods || {};
+			var ev = {keyCode: keyCode, shiftKey: !!mods.shift, altKey: false, ctrlKey: false, metaKey: false,
+				target: r.widget.domNode, defaultPrevented: false, prevented: false,
+				preventDefault: function() { this.prevented = true; }, stopPropagation: function() {}};
+			r.widget.handleKeydown(ev);
+			return ev;
+		}
+		function labels(r) {
+			return r.widget.menu.entries.map(function(e) { return e.action + ":" + e.type; });
+		}
+		function choose(r, action, type) {
+			var i = labels(r).indexOf(action + ":" + type);
+			expect(i).not.toBe(-1);
+			r.widget.setMenuActive(i);
+			press(r, 13);
+		}
+
+		it("shift-enter opens it with insert and turn-into entries for the unit", function() {
+			var r = render("para\n\n* a\n* b");
+			r.widget.select(r.idOf("para"));
+			expect(press(r, 13, {shift: true}).prevented).toBe(true);
+			expect(labels(r)).toEqual(["insert:paragraph", "insert:heading1", "insert:heading2", "insert:heading3",
+				"insert:bulleted", "insert:numbered", "insert:quote", "insert:code",
+				"convert:heading1", "convert:heading2", "convert:heading3", "convert:bulleted", "convert:numbered",
+				"convert:quote", "convert:code"]);
+			expect(hasClass(r.widget.menu.node, "rr-ol-menu")).toBe(true);
+			// Escape closes, nothing written
+			press(r, 27);
+			expect(r.widget.menu).toBe(null);
+			// A single bullet: only bulleted/numbered
+			r.widget.select(r.idOf("* a"));
+			press(r, 13, {shift: true});
+			expect(labels(r)).toEqual(["convert:numbered"]);
+		});
+
+		it("up/down move the active entry; another key closes the menu and acts as usual", function() {
+			var r = render("para\n\nnext");
+			r.widget.select(r.idOf("para"));
+			press(r, 13, {shift: true});
+			press(r, 40);
+			press(r, 40);
+			expect(r.widget.menu.active).toBe(2);
+			press(r, 38);
+			expect(r.widget.menu.active).toBe(1);
+			press(r, 38);
+			press(r, 38);
+			expect(r.widget.menu.active).toBe(0);
+			press(r, 9);
+			expect(r.widget.menu).toBe(null);
+		});
+
+		it("insert opens an editor for the new block; saving inserts it of that type", function() {
+			var r = render("para\n\n! H\n\ntext");
+			r.widget.select(r.idOf("para"));
+			press(r, 13, {shift: true});
+			choose(r, "insert", "heading2");
+			expect(r.widget.editor).not.toBe(null);
+			expect(r.widget.editor.blockType).toBe("heading2");
+			expect(r.wiki.getTiddler(BUF + "T").fields["outline-block-type"]).toBe("heading2");
+			r.type("New");
+			r.widget.saveEdit();
+			expect(r.text()).toBe("para\n\n!! New\n\n! H\n\ntext");
+			r.refresh();
+			expect(r.widget.units[r.widget.selectedId].unit.kind).toBe("heading");
+		});
+
+		it("insert after a heading: a new heading goes after the section, its editor too", function() {
+			var r = render("! H\n\ntext\n\n! I");
+			r.widget.select(r.idOf("! H"));
+			press(r, 13, {shift: true});
+			choose(r, "insert", "heading1");
+			var host = r.widget.editor.host,
+				textP = r.widget.units[r.idOf("text")].domNodes[0];
+			expect(siblings(textP).indexOf(host)).toBe(siblings(textP).indexOf(textP) + 1);
+			r.type("G");
+			r.widget.saveEdit();
+			expect(r.text()).toBe("! H\n\ntext\n\n! G\n\n! I");
+		});
+
+		it("a new code block: Enter is a newline", function() {
+			var r = render("para");
+			r.widget.select(r.idOf("para"));
+			press(r, 13, {shift: true});
+			choose(r, "insert", "code");
+			expect(r.widget.editor.multiline).toBe(true);
+			r.type("a\nb");
+			r.widget.saveEdit();
+			expect(r.text()).toBe("para\n\n```\na\nb\n```");
+		});
+
+		it("turn into converts the unit and keeps it selected", function() {
+			var r = render("para\n\nnext");
+			r.widget.select(r.idOf("para"));
+			press(r, 13, {shift: true});
+			choose(r, "convert", "bulleted");
+			expect(r.text()).toBe("* para\n\nnext");
+			r.refresh();
+			var sel = r.widget.units[r.widget.selectedId].unit;
+			expect(sel.kind).toBe("item");
+		});
+
+		it("a bullet switches its list type with its siblings", function() {
+			var r = render("* a\n* b\n** b1");
+			r.widget.select(r.idOf("* b"));
+			press(r, 13, {shift: true});
+			choose(r, "convert", "numbered");
+			expect(r.text()).toBe("# a\n# b\n#* b1");
+		});
+
+		it("not in read-only wikis", function() {
+			var r = render("para", [{title: "$:/status/IsReadOnly", text: "yes"}]);
+			r.widget.select(r.idOf("para"));
+			expect(press(r, 13, {shift: true}).prevented).toBe(true);
+			expect(r.widget.menu).toBe(null);
+		});
+	});
+
+	it("no selection frames while an editor is open", function() {
+		var r = render("* a\n* b");
+		r.widget.select(r.idOf("* a"));
+		r.widget.startEdit(r.idOf("* a"), {isNew: true});
+		expect(hasClass(r.widget.domNode, "rr-ol-is-editing")).toBe(true);
+		r.widget.cancelEdit();
+		expect(hasClass(r.widget.domNode, "rr-ol-is-editing")).toBe(false);
 	});
 
 	it("uses a div host before non-items and hides them", function() {
@@ -273,11 +561,22 @@ describe("outline editor", function() {
 	});
 
 	it("keeps CRLF line ends", function() {
-		var r = render("* a\r\n* b");
-		r.widget.startEdit(r.idOf("* a"));
-		r.type("* a\nx");
+		var r = render("p\r\n\r\n* b");
+		r.widget.startEdit(r.idOf("p"));
+		r.type("p\nx");
 		r.widget.saveEdit();
-		expect(r.text()).toBe("* a\r\nx\r\n* b");
+		expect(r.text()).toBe("p\r\nx\r\n\r\n* b");
+	});
+
+	it("a line break typed in an item is saved as <br>: the list stays intact", function() {
+		var r = render("* a\n* b\n** b1");
+		r.widget.startEdit(r.idOf("* a"));
+		r.type("a\nx");
+		r.widget.saveEdit();
+		expect(r.text()).toBe("* a<br>x\n* b\n** b1");
+		r.refresh();
+		r.widget.startEdit(r.idOf("* a<br>x"));
+		expect(r.buffer()).toBe("a\nx");
 	});
 
 	it("outside change: save lands at the relocated unit", function() {
@@ -332,10 +631,10 @@ describe("outline editor", function() {
 		expect(r.widget.startEdit(0)).toBe(false);
 	});
 
-	it("shift-enter in select mode starts the edit of the selected unit", function() {
+	it("enter in select mode starts the edit of the selected unit", function() {
 		var r = render("* a\n* b");
 		r.widget.select(r.idOf("* b"));
-		var ev = {keyCode: 13, shiftKey: true, altKey: false, ctrlKey: false, metaKey: false,
+		var ev = {keyCode: 13, shiftKey: false, altKey: false, ctrlKey: false, metaKey: false,
 			target: r.widget.domNode, defaultPrevented: false, prevented: false,
 			preventDefault: function() { this.prevented = true; }, stopPropagation: function() {}};
 		r.widget.handleKeydown(ev);
@@ -379,7 +678,7 @@ describe("outline editor", function() {
 		expect(r.text()).toBe("* b\n* a\n* c");
 		expect(r.widget.editSelected()).toBe(true);
 		expect(r.widget.editor).not.toBe(null);
-		expect(r.buffer()).toBe("* a");
+		expect(r.buffer()).toBe("a");
 		expect(r.widget.editor.origStart).toBe(4);
 	});
 
