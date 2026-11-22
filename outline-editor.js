@@ -171,6 +171,8 @@ methods.startEdit = function(id, opts) {
 		"outline-block-type": ed.blockType
 	}));
 	this.placeEditor(true);
+	// Only when opening: a re-attached editor (after a re-render) keeps its caret
+	this.settleCaret();
 	return true;
 };
 
@@ -623,6 +625,32 @@ methods.editorCaret = function() {
 		[engine.domNode.selectionStart, engine.domNode.selectionEnd] : null;
 };
 
+/*
+A freshly opened editor starts with the caret at the end of the text (or at editor.caret, set by the caller), never
+with the text selected. The edit widget does this when it focuses; some browsers or plugins select the whole text
+on focus, and a double-click's own selection can move the caret afterwards. One tick later the caret is set again,
+unless something was typed meanwhile.
+*/
+methods.settleCaret = function() {
+	var ed = this.editor,
+		self = this,
+		start = this.wiki.getTiddlerText(this.bufferTitle(), "");
+	if(!$tw.browser || !ed) {
+		return;
+	}
+	setTimeout(function() {
+		var engine = self.editorEngine(),
+			node = engine && engine.domNode;
+		if(self.editor !== ed || !node || !node.setSelectionRange || node.value !== start || !ed.focused) {
+			return;
+		}
+		var caret = ed.caret || [node.value.length, node.value.length];
+		if(node.selectionStart !== caret[0] || node.selectionEnd !== caret[1]) {
+			node.setSelectionRange(caret[0], caret[1]);
+		}
+	}, 0);
+};
+
 methods.focusEditor = function() {
 	var engine = this.editorEngine();
 	if(engine && engine.focus && $tw.browser) {
@@ -695,9 +723,13 @@ methods.handleEditorKeydown = function(event) {
 	if(this.keyMatches(event, "outline-save")) {
 		this.saveEdit();
 	} else if(!ed.multiline && this.keyMatches(event, "outline-continue")) {
-		this.saveEdit({"continue": true});
+		if(!this.editSplit()) {
+			this.saveEdit({"continue": true});
+		}
 	} else if(!ed.multiline && this.keyMatches(event, "outline-newline")) {
 		this.insertNewline();
+	} else if(this.keyMatches(event, "outline-merge") && this.editMerge()) {
+		// consumed
 	} else if(this.keyMatches(event, "outline-cancel")) {
 		this.cancelEdit();
 	} else if(this.keyMatches(event, "outline-move-up")) {
@@ -778,6 +810,111 @@ methods.editOperate = function(name, arg) {
 		this.focusEditor();
 	}
 	return true;
+};
+
+/*
+Backspace with the caret at the start of a list item (nothing selected): merge the item into the item above it in its
+list (the previous item in document order) and edit that one, the caret where the merged text begins. An empty item
+is deleted and the editor goes to the end of the item above; its sub-items stay. An empty new item is discarded the
+same way. False (the key acts as usual) anywhere else: not at the start, not a list item, a multi-line item, the
+first item of a list, a new item with text.
+*/
+methods.editMerge = function() {
+	var ed = this.editor,
+		caret = this.editorCaret(),
+		adapter = this.getAdapter();
+	if(!ed || ed.multiline || ed.kind !== "item" || ed.unitKind !== "item" || ed.id === -1 || !adapter ||
+		!caret || caret[0] !== 0 || caret[1] !== 0) {
+		return false;
+	}
+	var blank = !/\S/.test(this.wiki.getTiddlerText(this.bufferTitle(), ""));
+	if(ed.isNew) {
+		if(!blank) {
+			return false;
+		}
+		// The item above the empty new one: the last item of the anchor's subtree
+		var anchor = this.units[ed.id].unit,
+			above = adapter.itemBefore(this.model, ed.id, anchor.subtreeEnd);
+		this.cancelEdit();
+		if(above !== -1 && this.select(above) && this.editSelected()) {
+			this.editAtEnd();
+		}
+		return true;
+	}
+	if(adapter.mergeTarget(this.model, ed.id) === -1) {
+		return false;
+	}
+	if(this.selectedId !== ed.id) {
+		this.select(ed.id);
+	}
+	if(blank) {
+		// A blank save would delete the item but refuse one with sub-items: merge "" instead (sub-items stay)
+		this.closeEditor(true);
+	} else if(!this.saveEdit()) {
+		return true;
+	}
+	if(!this.ensureCurrent()) {
+		return true;
+	}
+	var id = this.selectedId,
+		target = adapter.mergeTarget(this.model, id),
+		join = target === -1 ? 0 : adapter.editSource(this.model.text, this.model, target).length;
+	this.operate("merge", blank ? "" : undefined);
+	this.ensureCurrent();
+	// Merged: the item above is selected, edited at the join; refused: the same item again, at its start
+	var merged = this.selectedId !== id;
+	if(this.editSelected() && this.editor) {
+		this.editor.caret = merged ? [join, join] : [0, 0];
+		this.focusEditor();
+	}
+	return true;
+};
+
+/*
+Enter with the caret inside a list item's text (not at its start or end, nothing selected): split the item. The text
+before the caret stays, the text after it goes to a new item right below (a sibling, or the first sub-item when the
+item has sub-items), which is edited with the caret at its start. The inverse of the Backspace merge. False (Enter
+acts as usual: save and new) anywhere else.
+*/
+methods.editSplit = function() {
+	var ed = this.editor,
+		caret = this.editorCaret(),
+		value = this.wiki.getTiddlerText(this.bufferTitle(), "");
+	if(!ed || ed.multiline || ed.isNew || ed.kind !== "item" || ed.unitKind !== "item" || ed.id === -1 || !caret ||
+		caret[0] !== caret[1]) {
+		return false;
+	}
+	var head = value.substring(0, caret[0]),
+		rest = value.substring(caret[0]);
+	if(!/\S/.test(head) || !/\S/.test(rest)) {
+		return false;
+	}
+	if(this.selectedId !== ed.id) {
+		this.select(ed.id);
+	}
+	// Save the part before the caret (with the usual conflict handling), then add the rest below
+	this.wiki.setText(this.bufferTitle(), "text", null, head.replace(/[ \t]+$/, ""));
+	if(!this.saveEdit()) {
+		return true;
+	}
+	if(!this.ensureCurrent()) {
+		return true;
+	}
+	var id = this.selectedId;
+	this.operate("split", rest.replace(/^[ \t]+/, ""));
+	this.ensureCurrent();
+	var split = this.selectedId !== id;
+	if(this.editSelected() && this.editor && split) {
+		this.editor.caret = [0, 0];
+		this.focusEditor();
+	}
+	return true;
+};
+
+methods.editAtEnd = function() {
+	var len = this.wiki.getTiddlerText(this.bufferTitle(), "").length;
+	this.editor.caret = [len, len];
+	this.focusEditor();
 };
 
 // Select-mode Shift-Enter

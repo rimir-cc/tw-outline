@@ -243,23 +243,31 @@ exports.findUnit = function(model, start, kind, accept) {
 Post-operation guard: true when `newText` has the units a structural operation `name` on unit `id` of model
 `before` must leave. Moves keep the unit count and the kinds and levels (as a multiset: the order changes).
 Indent/promote keep the unit count and order; the units of the operated subtree (of the unit's kind) change
-their level by exactly +1/-1, all others keep it. Anything else is refused by the caller (no write).
+their level by exactly +1/-1, all others keep it. Delete, merge and split remove exactly the units
+result.removed (ids) and add exactly result.added ({kind, level}), keeping all others with their kinds and levels
+(`result`: the adapter's result). Anything else is refused by the caller (no write).
 */
-exports.checkOp = function(wiki, before, id, name, newText, title) {
+exports.checkOp = function(wiki, before, id, name, newText, title, result) {
 	// The adapter's convert checks its own result (a conversion changes kinds and the unit count)
 	if(name === "convert") {
 		return true;
 	}
 	var after = exports.buildModel(wiki, newText, title),
 		u = before.units[id];
+	function signature(units) {
+		return units.map(function(x) { return x.kind + ":" + x.level; }).sort().join(",");
+	}
+	if(name === "deleteUnit" || name === "merge" || name === "split") {
+		var removed = (result && result.removed) || [],
+			added = (result && result.added) || [];
+		return !!u && !!result && (removed.length || added.length) > 0 && signature(after.units) ===
+			signature(before.units.filter(function(x) { return removed.indexOf(x.id) === -1; }).concat(added));
+	}
 	if(!u || after.units.length !== before.units.length) {
 		return false;
 	}
-	function signature(m) {
-		return m.units.map(function(x) { return x.kind + ":" + x.level; }).sort().join(",");
-	}
 	if(name === "move") {
-		return signature(after) === signature(before);
+		return signature(after.units) === signature(before.units);
 	}
 
 	if(name !== "indent" && name !== "promote") {

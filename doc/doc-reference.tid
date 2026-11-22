@@ -23,16 +23,18 @@ type: text/vnd.tiddlywiki
 |`outline-move-up` / `outline-move-down` |alt-Up / alt-Down |Swap with previous / next sibling |
 |`outline-indent` / `outline-promote` |Tab / shift-Tab |Demote / promote by one level |
 |`outline-edit` |Enter |Edit in place (on a transclusion Enter opens the target) |
+|`outline-delete` |Delete |Delete the unit with its subtree, after a confirmation menu (see Delete) |
 |`outline-menu` |shift-Enter |Block menu: insert a new block after the unit, or turn it into another type; Up/Down, Enter runs, Escape closes |
 |`outline-open` |Enter |Open the transclusion target in outline mode |
 |`outline-clear` |Escape |Clear selection |
 |`outline-save` |ctrl-Enter |Save the edit |
-|`outline-continue` |Enter |Save and open a new unit (single-line units) |
+|`outline-continue` |Enter |Save and open a new unit (single-line units). In the middle of a list item's text: split it (see Split) |
 |`outline-newline` |shift-Enter |Newline in the editor (saved as `<br>` in list items and headings) |
 |`outline-indent` / `outline-promote` |Tab / shift-Tab |In the editor too: save, indent / promote, keep editing |
 |`outline-move-up` / `outline-move-down` |alt-Up / alt-Down |In the editor too: save, move, keep editing |
 |`outline-edit-up` |ctrl-Up |Editor only: save and edit the previous unit |
 |`outline-edit-down` |ctrl-Down |Editor only: save and edit the next unit |
+|`outline-merge` |Backspace |Editor, caret at the start of a list item: merge it into the item above (see Merge) |
 |`outline-cancel` |Escape |Discard the edit |
 |`outline-help` |shift-slash |Show / hide the key overview. `?` always works too, whatever the keyboard layout; Escape closes it |
 
@@ -54,6 +56,8 @@ The widget sets `data-ol-type` on each unit's first DOM node (`unitType` in `dom
 
 The //keys// tab and the overlay (`?` in an outline, or the small ? button at its top right) show the same table, `$:/plugins/rimir/outline/ui/keys-table`, with the keys read live from the config. Its groups are the tiddlers listed in `$:/plugins/rimir/outline/key-groups`: each has a `caption`, an optional `hint`, a `list` of shortcut names and, optionally, text shown after the keys (the fixed block menu keys). The settings tab uses the same groups.
 
+A double-click on a unit opens the editor on it (on a transclusion: its line; links and buttons keep their click).
+
 In multi-line units (code blocks, tables, widgets, `"""` items) Enter is a plain newline and only Ctrl-Enter saves.
 
 !! Indent and promote
@@ -69,6 +73,25 @@ Swap the unit's whole subtree with the adjacent sibling's whole subtree, blank-l
 * List item: siblings are items of the same list at the same depth.
 * Heading: siblings are headings of the same level in the same parent.
 * Other blocks: siblings are blocks in the same section (or HTML container, or root) before any sub-heading.
+
+!! Delete
+
+The unit goes with its subtree: an item with its sub-items, a heading with its section, a list with its items, a container with its contents. An only item takes its list along and an only child its container (neither can stay empty). Separators as for a blank save: one blank line stays between the neighbours. The selection goes to the unit that now starts there.
+
+|!Selected |!Menu |
+|Heading with a section |Yes, the heading and its section (N blocks) · Just the heading (its section joins the one above) · Cancel |
+|Whole list / item with sub-items / container |Yes, ... (N items / sub-items / blocks) · Cancel |
+|Anything else |Yes, delete · Cancel |
+
+The first entry is active: Delete, Enter deletes; Escape cancels. List items without sub-items are deleted at once while `$:/config/rimir/outline/quick-delete-items` is `yes` (the default); `no` asks for them too. The model guard refuses a result that removes other units than these (e.g. two lists that would merge).
+
+!! Merge (Backspace)
+
+In the editor, caret at the very start of a list item (nothing selected): the item's text goes to the end of the item above it in the list (the previous item in document order: the parent, or the last sub-item of the previous sibling), the item's line goes, its sub-items keep their lines and levels. The editor continues in the item above, at the join. An empty item is simply deleted (also one with sub-items) and the editor goes to the end of the item above; an empty new item is discarded the same way. The first item of a list, other units and multi-line items: a normal Backspace.
+
+!! Split (Enter)
+
+In the editor, caret inside a list item's text (not at its start or end, nothing selected): the text before the caret stays in the item, the text after it goes to a new item directly below, which is edited with the caret at its start. The new item is a sibling with the same marker; when the item has sub-items it becomes their first one, so the sub-items stay with the item. Backspace at the new item's start (merge) gives back the original line.
 
 !! New unit (Enter)
 
@@ -92,6 +115,7 @@ Swap the unit's whole subtree with the adjacent sibling's whole subtree, blank-l
 |`$:/state/rimir/outline/on/<title>` |Outline mode on (`yes`) / off |
 |`$:/temp/rimir/outline/...` |Editor buffer, selection and open key overview (`help/<title>`) while active |
 |`$:/config/rimir/outline/badges` |Type badges: `all` (default), `headings` (h1–h6 only) or `off`. Sets class `rr-ol-badges-<mode>` on the frame; the badge text is the unit's `data-ol-type` |
+|`$:/config/rimir/outline/quick-delete-items` |`yes` (default): Delete removes list items without sub-items without asking; `no`: always ask |
 |`$:/config/rimir/outline/full-editor` |`yes`: full text editor with toolbar; otherwise (default `no`) the compact one-line editor |
 
 </$fill>

@@ -3,7 +3,7 @@ title: $:/plugins/rimir/outline/format-wikitext.js
 type: application/javascript
 module-type: outline-format
 
-Wikitext adapter: indent, promote, move, replace, insertNew, remove. Functions take (text, model, id) and return null or {text, select}.
+Wikitext adapter: indent, promote, move, replace, insertNew, remove, deleteUnit, merge, split. Functions take (text, model, id) and return null or {text, select}.
 
 \*/
 "use strict";
@@ -349,7 +349,12 @@ the last unit takes the line breaks before it instead.
 exports.remove = function(text, model, id) {
 	var u = model.units[id];
 	if(!u || u.children.length) { return null; }
-	var a = u.start, b = u.end,
+	return cut(text, model, u, u.end);
+};
+
+// Remove [u.start, end) with the separator rules of remove
+function cut(text, model, u, end) {
+	var a = u.start, b = end,
 		after = text.substring(b),
 		parent = u.parent === -1 ? null : model.units[u.parent],
 		m;
@@ -372,6 +377,121 @@ exports.remove = function(text, model, id) {
 	}
 	var result = utils.splice(text, a, b, "");
 	return {text: result, select: Math.min(a, result.length)};
+}
+
+/*
+The unit a delete of `id` removes: an only item takes its list along, an only child its HTML container (an empty list
+cannot stay, an empty container would turn into a plain block). Repeated upwards.
+*/
+function deleteTarget(model, id) {
+	var u = model.units[id];
+	for(;;) {
+		var parent = u && u.parent !== -1 ? model.units[u.parent] : null;
+		if(!parent || parent.children.length !== 1 ||
+			!(u.kind === "item" && parent.kind === "list" || parent.kind === "container")) {
+			return u;
+		}
+		u = parent;
+	}
+}
+
+// Ids of u and all units below it
+function subtreeIds(model, u) {
+	return u.children.reduce(function(ids, c) { return ids.concat(subtreeIds(model, model.units[c])); }, [u.id]);
+}
+
+/*
+Number of units a delete of `id` removes besides the unit itself (mode "own": none; a heading's section stays and
+joins the section above). What goes along with an only child (its list or container) is counted too.
+*/
+exports.deleteCount = function(model, id, mode) {
+	var u = deleteTarget(model, id);
+	return !u || mode === "own" ? 0 : subtreeIds(model, u).length - 1;
+};
+
+/*
+Delete unit `id` with its subtree (an item with its sub-items, a heading with its section, a list with its items),
+or with mode "own" only a heading's line. Separators as in remove. result.removed: the ids of the removed units.
+*/
+exports.deleteUnit = function(text, model, id, mode) {
+	var u = model.units[id], result;
+	if(!u) { return null; }
+	if(mode === "own") {
+		if(u.kind !== "heading") { return null; }
+		result = cut(text, model, u, u.end);
+		result.removed = [u.id];
+		return result;
+	}
+	u = deleteTarget(model, id);
+	result = cut(text, model, u, u.subtreeEnd);
+	result.removed = subtreeIds(model, u);
+	return result;
+};
+
+/*
+Split list item `id` (Enter in the middle of its text, after its content was saved as the part before the caret):
+a new item with `rest` (the editor text after the caret) goes directly below the item's line. It is a sibling with
+the same marker, or, when the item has sub-items, their first one (marker of the first sub-item), so the sub-items
+stay with the item. Backspace at its start (merge) gives back the original. Returns {text, select, kind, added}.
+*/
+exports.split = function(text, model, id, rest) {
+	var u = model.units[id];
+	if(!u || u.kind !== "item" || typeof rest !== "string" || !/\S/.test(rest)) { return null; }
+	var first = u.children.length ? model.units[u.children[0]] : null,
+		marker = first ? first.marker : u.marker,
+		nl = utils.eol(text),
+		insert = nl + marker + " " + toBreaks(stripTypedMarker(u, rest));
+	return {
+		text: utils.splice(text, u.end, u.end, insert),
+		select: u.end + nl.length,
+		kind: "item",
+		added: [{kind: "item", level: marker.length}]
+	};
+};
+
+// The last item of the list of item `id` that starts before `pos` (the item visually above `pos`), or -1
+exports.itemBefore = function(model, id, pos) {
+	var u = model.units[id], root = u;
+	if(!u || u.kind !== "item") { return -1; }
+	while(root && root.kind !== "list") {
+		root = root.parent === -1 ? null : model.units[root.parent];
+	}
+	var target = -1, start = -1;
+	model.units.forEach(function(d) {
+		if(root && d.kind === "item" && d.start < pos && d.start > start && d.start >= root.start && d.start < root.subtreeEnd) {
+			target = d.id;
+			start = d.start;
+		}
+	});
+	return target;
+};
+
+// The item above list item `id` in its list (the previous item in document order), or -1
+exports.mergeTarget = function(model, id) {
+	var u = model.units[id];
+	return u ? exports.itemBefore(model, id, u.start) : -1;
+};
+
+/*
+Merge list item `id` into the item above it (mergeTarget): its content goes to the end of that item's line and its
+own line goes; its sub-items keep their lines and levels. content: the editor text to merge instead of the item's
+current content ("" deletes the item). Returns {text, select, kind, caret, removed} (caret: where the merged text starts in
+the target's editor text), or null without an item above.
+*/
+exports.merge = function(text, model, id, content) {
+	var u = model.units[id],
+		pid = exports.mergeTarget(model, id),
+		p = pid === -1 ? null : model.units[pid];
+	// Only line breaks between the two (a blank line inside one list goes with the merge)
+	if(!p || /\S/.test(text.substring(p.end, u.start))) { return null; }
+	var c = typeof content === "string" ? toBreaks(stripTypedMarker(u, content)) : text.substring(contentStart(text, u), u.end);
+	return {
+		text: text.substring(0, p.end) + c + text.substring(u.end),
+		select: p.start,
+		kind: "item",
+		caret: exports.editSource(text, model, pid).length,
+		removed: [id]
+	};
 };
 
 // What the editor shows: the unit's content, without an item marker or heading prefix; <br> in items and headings as line breaks

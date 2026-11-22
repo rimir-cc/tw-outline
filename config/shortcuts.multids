@@ -21,3 +21,5 @@ outline-cancel: Escape
 outline-edit-up: ctrl-Up
 outline-edit-down: ctrl-Down
 outline-help: shift-slash
+outline-delete: Delete
+outline-merge: Backspace

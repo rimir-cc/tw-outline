@@ -24,12 +24,12 @@ The tiddler is rendered unchanged. A JS widget, `$outline`, wraps the normal bod
 |`model.js` |Collects units from the widget tree: start, end, kind, level, parent, siblings |
 |`text-utils.js`, `dom-utils.js` |Pure text helpers; DOM lookup shared by widget and editor |
 |`formats.js` |Registry of format adapters |
-|`format-wikitext.js` |Wikitext adapter: indent, promote, move, replace, insertNew, remove, editSource, isMultiline |
+|`format-wikitext.js` |Wikitext adapter: indent, promote, move, replace, insertNew, remove, deleteUnit, merge, editSource, isMultiline |
 |`outline-widget.js` |The `$outline` widget: unit-to-DOM mapping, stamps, selection, writes |
 |`outline-keys.js` |Key dispatch through `$:/config/shortcuts/outline-*`; toggles the key overview |
 |`keys/*`, `ui/keys-table`, `keys.tid` |Key groups (caption, hint, list of shortcut names), the overview table, the keys tab |
 |`outline-editor.js` |In-place editor: temp tiddler, placeholder, save, continue, conflict handling |
-|`outline-menu.js` |Block menu (Shift-Enter): entries from the adapter, keyboard and mouse, runs insert / convert / edit |
+|`outline-menu.js` |Menus at the selection: block menu (Shift-Enter: insert / convert / edit) and delete confirmation (Delete); keyboard and mouse |
 |`language/blocks.multids` |Labels of the block types and menu groups |
 |`ui/*` |Toolbar button and icon, body template and its filter, help bar (? button and overview), editor template, transclusion marker |
 |`styles.tid` |Selection frame and item box, compact editor, marker |

@@ -3,16 +3,21 @@ title: $:/plugins/rimir/outline/outline-menu.js
 type: application/javascript
 module-type: library
 
-Block menu of the $outline widget (outline-menu key, default Shift-Enter, in selection mode).
+Menus of the $outline widget at the selected unit: the block menu (outline-menu key, default Shift-Enter) and the
+delete confirmation (outline-delete key, default Delete), both in selection mode.
 install(proto) adds these methods to the widget prototype:
 
-  openMenu()            - open the menu at the selected unit; false when nothing can be offered
+  openMenu()            - open the block menu at the selected unit; false when nothing is selected
+  deleteSelected()      - delete the selected unit, after the confirmation menu (see below)
+  showMenu(id, entries) - show a menu of entries at unit id
   closeMenu()           - remove it
   handleMenuKeydown(e)  - Up/Down/Home/End move, Enter runs, Escape closes; true when consumed
 
-Entries, in two groups: "Insert after" (a new block of a type, edited at once; not for single list items) and
-"Turn into" (the adapter's convertTypes for the unit). On a transclusion the first entry edits the line itself.
-Labels are the tiddlers $:/plugins/rimir/outline/language/block/<type>.
+Block menu entries, in two groups: "Insert after" (a new block of a type, edited at once; not for single list items)
+and "Turn into" (the adapter's convertTypes for the unit). On a transclusion the first entry edits the line itself.
+Delete confirmation: "Yes" (with the count of what goes along), on a heading with a section also "Just the heading",
+and "Cancel". Childless list items are deleted without asking when $:/config/rimir/outline/quick-delete-items is yes.
+Labels are the tiddlers $:/plugins/rimir/outline/language/block/<key>.
 
 \*/
 "use strict";
@@ -21,11 +26,12 @@ var dom = require("$:/plugins/rimir/outline/dom-utils.js");
 
 var LABEL_PREFIX = "$:/plugins/rimir/outline/language/block/",
 	INSERT_TYPES = ["paragraph", "heading1", "heading2", "heading3", "bulleted", "numbered", "quote", "code"],
-	KEY = {up: 38, down: 40, home: 36, end: 35, enter: 13, escape: 27};
+	KEY = {up: 38, down: 40, home: 36, end: 35, enter: 13, escape: 27},
+	QUICK_DELETE = "$:/config/rimir/outline/quick-delete-items";
 
 var methods = {};
 
-// Entries for unit `id`: [{group, action: "insert"|"convert"|"edit", type}]
+// Block menu entries for unit `id`: [{group, action: "insert"|"convert"|"edit", type}]
 methods.menuEntries = function(id) {
 	var adapter = this.getAdapter(),
 		unit = this.units[id].unit,
@@ -57,12 +63,58 @@ methods.openMenu = function() {
 	if(id === -1 || this.editor || this.isReadOnly() || !this.ensureCurrent()) {
 		return id !== -1;
 	}
+	this.showMenu(this.selectedId, this.menuEntries(this.selectedId));
+	return true;
+};
+
+methods.deleteSelected = function() {
+	var id = this.selectedId,
+		adapter = this.getAdapter();
+	this.closeMenu();
+	if(id === -1 || this.editor || this.isReadOnly() || !adapter || !this.ensureCurrent()) {
+		return id !== -1;
+	}
 	id = this.selectedId;
-	var entries = this.menuEntries(id),
-		doc = this.document,
+	var unit = this.units[id].unit,
+		count = adapter.deleteCount(this.model, id),
+		yes = {group: "group-delete", action: "delete"};
+	if(unit.kind === "item" && !unit.children.length && this.wiki.getTiddlerText(QUICK_DELETE) === "yes") {
+		this.operate("deleteUnit");
+		return true;
+	}
+	if(count && unit.kind === "heading") {
+		yes.text = this.countLabel("delete-heading", "blocks", count);
+	} else if(count && unit.kind === "list") {
+		yes.text = this.countLabel("delete-list", "items", count);
+	} else if(count && unit.kind === "item" && unit.children.length) {
+		yes.text = this.countLabel("delete-children", "sub-items", count);
+	} else if(count && unit.kind === "container") {
+		yes.text = this.countLabel("delete-container", "blocks", count);
+	} else {
+		yes.type = "delete";
+	}
+	var entries = [yes];
+	if(count && unit.kind === "heading") {
+		entries.push({group: "group-delete", action: "delete", arg: "own", type: "delete-own"});
+	}
+	entries.push({group: "group-delete", action: "cancel", type: "cancel"});
+	this.showMenu(id, entries);
+	return true;
+};
+
+// Label `key` with $counted$ replaced by "<count> <noun>" (language count-<noun> / count-<noun>-one)
+methods.countLabel = function(key, noun, count) {
+	var counted = this.label("count-" + noun + (count === 1 ? "-one" : "")).replace("$count$", String(count));
+	return this.label(key).replace("$counted$", counted);
+};
+
+// Show `entries` ({group, action, type or text, arg}) as a menu below unit `id`; the first entry is active
+methods.showMenu = function(id, entries) {
+	this.closeMenu();
+	var doc = this.document,
 		self = this;
 	if(!entries.length) {
-		return true;
+		return;
 	}
 	var node = doc.createElement("div"),
 		group = null;
@@ -78,7 +130,7 @@ methods.openMenu = function() {
 		var item = doc.createElement("div");
 		item.className = "rr-ol-menu-item";
 		item.setAttribute("data-ol-menu-index", String(index));
-		item.appendChild(doc.createTextNode(self.label(entry.type)));
+		item.appendChild(doc.createTextNode(entry.text || self.label(entry.type)));
 		entry.node = item;
 		node.appendChild(item);
 	});
@@ -100,7 +152,6 @@ methods.openMenu = function() {
 	this.domNode.appendChild(node);
 	this.positionMenu();
 	this.setMenuActive(0);
-	return true;
 };
 
 // Below the selected unit's first DOM node, inside the (position: relative) outline container
@@ -146,7 +197,11 @@ methods.runMenuEntry = function(index) {
 		this.select(id);
 	}
 	dom.focus(this.domNode);
-	if(entry.action === "edit") {
+	if(entry.action === "cancel") {
+		return;
+	} else if(entry.action === "delete") {
+		this.operate("deleteUnit", entry.arg);
+	} else if(entry.action === "edit") {
 		this.startEdit(id);
 	} else if(entry.action === "insert") {
 		this.startEdit(id, {isNew: true, blockType: entry.type});

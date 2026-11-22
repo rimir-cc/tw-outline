@@ -54,6 +54,7 @@ var ACTIONS = [
 	{name: "outline-open", run: function(w) { return w.openTransclusion(); }},
 	{name: "outline-edit", run: function(w) { return w.editSelected(); }},
 	{name: "outline-menu", run: function(w) { return w.openMenu(); }},
+	{name: "outline-delete", run: function(w) { return w.deleteSelected(); }},
 	{name: "outline-move-up", run: function(w) { return w.operate("move", -1); }},
 	{name: "outline-move-down", run: function(w) { return w.operate("move", 1); }},
 	{name: "outline-indent", run: function(w) { return w.operate("indent"); }},
@@ -352,7 +353,7 @@ methods.operate = function(name, arg) {
 	}
 	var result = adapter[name](text, this.model, id, arg);
 	// Guard: never write a result that changes units the operation must leave alone
-	if(result && result.text !== text && !checkOp(this.wiki, this.model, id, name, result.text, this.tiddlerTitle)) {
+	if(result && result.text !== text && !checkOp(this.wiki, this.model, id, name, result.text, this.tiddlerTitle, result)) {
 		return true;
 	}
 	this.applyResult(result);
@@ -489,14 +490,51 @@ methods.handleClick = function(event) {
 			return;
 		}
 	}
-	while(node && node !== this.domNode) {
+	var id = this.unitIdAt(node);
+	if(id !== -1 && this.select(id) && !isEditable(event.target)) {
+		focus(this.domNode);
+	}
+};
+
+// Id of the unit whose stamped element contains `node` (the innermost), or -1
+methods.unitIdAt = function(node) {
+	for(; node && node !== this.domNode; node = node.parentNode) {
 		if(node.getAttribute && node.getAttribute("data-ol-id") !== null && node.getAttribute("data-ol-id") !== undefined) {
-			if(this.select(parseInt(node.getAttribute("data-ol-id"), 10)) && !isEditable(event.target)) {
-				focus(this.domNode);
-			}
+			return parseInt(node.getAttribute("data-ol-id"), 10);
+		}
+	}
+	return -1;
+};
+
+/*
+Double-click on a unit edits it (a transclusion: its line, not the target). Not inside the editor, not on links,
+buttons or inputs; the word the double-click selected is deselected.
+*/
+methods.handleDblClick = function(event) {
+	var node = event.target;
+	if(this.editor && this.editor.host && isInside(node, this.editor.host)) {
+		return;
+	}
+	if(isEditable(node)) {
+		return;
+	}
+	for(var m = node; m && m !== this.domNode; m = m.parentNode) {
+		if(m.tagName && /^(A|BUTTON)$/.test(m.tagName)) {
 			return;
 		}
-		node = node.parentNode;
+	}
+	var id = this.unitIdAt(node),
+		view = this.document.defaultView;
+	if(id === -1) {
+		return;
+	}
+	event.preventDefault();
+	// The word the double-click selected goes first (clearing it later would reset the editor's caret)
+	if(view && view.getSelection) {
+		view.getSelection().removeAllRanges();
+	}
+	if(this.select(id)) {
+		this.startEdit(id);
 	}
 };
 

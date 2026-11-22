@@ -60,6 +60,7 @@ OutlineWidget.prototype.render = function(parent, nextSibling) {
 	var self = this;
 	domNode.addEventListener("keydown", function(event) { self.handleKeydown(event); }, false);
 	domNode.addEventListener("click", function(event) { self.handleClick(event); }, false);
+	domNode.addEventListener("dblclick", function(event) { self.handleDblClick(event); }, false);
 	// The block menu closes when the focus leaves the outline
 	domNode.addEventListener("focusout", function(event) {
 		if(!event.relatedTarget || !domNode.contains(event.relatedTarget)) {

@@ -11,3 +11,17 @@ code: Code block
 edit: Edit this line
 group-insert: Insert after
 group-convert: Turn into
+group-delete: Delete?
+delete: Yes, delete
+delete-heading: Yes, the heading and its section ($counted$)
+delete-list: Yes, the whole list ($counted$)
+delete-children: Yes, with its sub-items ($counted$)
+delete-container: Yes, with its contents ($counted$)
+delete-own: Just the heading
+cancel: Cancel (Esc)
+count-blocks: $count$ blocks
+count-blocks-one: 1 block
+count-items: $count$ items
+count-items-one: 1 item
+count-sub-items: $count$ sub-items
+count-sub-items-one: 1 sub-item

@@ -1,4 +1,4 @@
 title: $:/plugins/rimir/outline/key-groups/editor
 caption: In the editor
-hint: The move and indent keys work while editing too.
-list: outline-save outline-continue outline-newline outline-cancel outline-edit-up outline-edit-down
+hint: The move and indent keys work while editing too. In a list item, Enter in the middle of the text splits it; merge acts at its start only.
+list: outline-save outline-continue outline-newline outline-merge outline-cancel outline-edit-up outline-edit-down

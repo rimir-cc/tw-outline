@@ -11,7 +11,7 @@ Tests for selection, configurable keys and structural operations of the $outline
 describe("outline selection and keys", function() {
 
 	var SEL = "$:/temp/rimir/outline/selection/",
-		KEYS = {up: 38, down: 40, left: 37, right: 39, tab: 9, escape: 27, enter: 13};
+		KEYS = {up: 38, down: 40, left: 37, right: 39, tab: 9, escape: 27, enter: 13, del: 46};
 
 	// Shortcut config (shadows of the plugin) copied into each test wiki
 	function shortcutTiddlers() {
@@ -107,7 +107,7 @@ describe("outline selection and keys", function() {
 				"outline-parent": "Left", "outline-child": "Right", "outline-up-deep": "ctrl-Up", "outline-down-deep": "ctrl-Down", "outline-edit-up": "ctrl-Up", "outline-edit-down": "ctrl-Down",
 				"outline-open": "Enter", "outline-clear": "Escape", "outline-save": "ctrl-Enter",
 				"outline-continue": "Enter", "outline-newline": "shift-Enter", "outline-cancel": "Escape",
-				"outline-help": "shift-slash"
+				"outline-help": "shift-slash", "outline-delete": "Delete", "outline-merge": "Backspace"
 			};
 		Object.keys(expected).forEach(function(name) {
 			expect(name + "=" + wiki.getTiddlerText("$:/config/shortcuts/" + name)).toBe(name + "=" + expected[name]);
@@ -175,6 +175,64 @@ describe("outline selection and keys", function() {
 		$tw.wiki.filterTiddlers("[all[shadows+tiddlers]removeprefix[$:/config/shortcuts/]prefix[outline-]]").forEach(function(name) {
 			expect(html).withContext(name).toContain("<strong>" + name + "</strong>");
 		});
+	});
+
+	it("delete asks first: yes deletes with the subtree, Escape and cancel keep it", function() {
+		var r = renderOutline(makeWiki([{title: "T", text: "* a\n* b\n** b1\n* c"}]), "T");
+		r.widget.select(r.widget.units.filter(function(e) { return e.unit.kind === "item"; })[1].unit.id);
+		expect(key(r, KEYS.del).prevented).toBe(true);
+		expect(r.widget.menu.entries.map(function(e) { return e.action; })).toEqual(["delete", "cancel"]);
+		expect(r.widget.menu.active).toBe(0);
+		key(r, KEYS.escape);
+		expect(r.widget.menu).toBe(null);
+		expect(r.wiki.getTiddlerText("T")).toBe("* a\n* b\n** b1\n* c");
+		key(r, KEYS.del);
+		key(r, KEYS.down);
+		key(r, KEYS.enter);
+		expect(r.wiki.getTiddlerText("T")).toBe("* a\n* b\n** b1\n* c");
+		key(r, KEYS.del);
+		key(r, KEYS.enter);
+		expect(r.wiki.getTiddlerText("T")).toBe("* a\n* c");
+	});
+
+	it("delete on a heading with a section offers just the heading", function() {
+		var r = renderOutline(makeWiki([{title: "T", text: "! A\n\nx\n\n! B\n\ny"}]), "T");
+		r.widget.select(0);
+		key(r, KEYS.del);
+		expect(r.widget.menu.entries.map(function(e) { return e.action + ":" + (e.arg || ""); })).toEqual(["delete:", "delete:own", "cancel:"]);
+		key(r, KEYS.down);
+		key(r, KEYS.enter);
+		expect(r.wiki.getTiddlerText("T")).toBe("x\n\n! B\n\ny");
+	});
+
+	it("quick delete of childless list items is a setting; read-only deletes nothing", function() {
+		var r = renderOutline(makeWiki([{title: "T", text: "* a\n** a1\n* b\n* c"},
+			{title: "$:/config/rimir/outline/quick-delete-items", text: "yes"}]), "T"),
+			items = function() { return r.widget.units.filter(function(e) { return e.unit.kind === "item"; }); };
+		r.widget.select(items()[2].unit.id);
+		key(r, KEYS.del);
+		expect(r.widget.menu).toBe(null);
+		expect(r.wiki.getTiddlerText("T")).toBe("* a\n** a1\n* c");
+		// With children it still asks
+		r.refresh();
+		r.widget.select(items()[0].unit.id);
+		key(r, KEYS.del);
+		expect(r.widget.menu).not.toBe(null);
+		key(r, KEYS.escape);
+		r.wiki.addTiddler({title: "$:/status/IsReadOnly", text: "yes"});
+		r.widget.select(items()[1].unit.id);
+		expect(key(r, KEYS.del).prevented).toBe(true);
+		expect(r.widget.menu).toBe(null);
+		expect(r.wiki.getTiddlerText("T")).toBe("* a\n** a1\n* c");
+	});
+
+	it("double-click edits the unit under the pointer, a transclusion its line", function() {
+		var r = renderOutline(makeWiki([{title: "T", text: "para\n\n{{X}}"}, {title: "X", text: "x"}]), "T"),
+			node = r.widget.units[1].domNodes[0];
+		r.widget.handleDblClick({target: node, preventDefault: function() {}});
+		expect(r.widget.editor).not.toBe(null);
+		expect(r.widget.editor.id).toBe(1);
+		expect(r.wiki.getTiddlerText("$:/temp/rimir/outline/edit/T")).toBe("{{X}}");
 	});
 
 	it("select marks the unit and saves the selection", function() {

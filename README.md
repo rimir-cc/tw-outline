@@ -11,7 +11,9 @@ Work on an ordinary tiddler like on a Streams outline: select a block, edit it i
 - **Selection** - click, Up/Down, Left/Right to the parent / first child, Escape clears.
 - **Move** - Alt-Up/Alt-Down swap a unit with its sibling, subtree included. Moves stay inside the parent.
 - **Indent** - Tab/Shift-Tab demote/promote list items and headings with their subtrees.
-- **In-place editor** - Enter opens TW's own edit widget at the unit: a compact one-line field by default, optionally the full editor with toolbar. Lists and headings are edited without their marker; nesting stays with Tab/Shift-Tab. Ctrl-Enter saves, Enter saves and starts a new unit, Escape discards, Ctrl-Up/Down save and move the editor to the previous/next unit.
+- **In-place editor** - Enter or a double-click opens TW's own edit widget at the unit: a compact one-line field by default, optionally the full editor with toolbar. Lists and headings are edited without their marker; nesting stays with Tab/Shift-Tab. Ctrl-Enter saves, Enter saves and starts a new unit, Escape discards, Ctrl-Up/Down save and move the editor to the previous/next unit.
+- **Delete** - the Delete key removes the selection with everything below it, after a small yes/no menu (a heading: with its section or just the heading); list items without sub-items go at once (a setting).
+- **Split and merge** - Enter in the middle of a list item splits it at the caret; Backspace at the start of an item joins it to the item above (an empty item is deleted), like in Streams.
 - **Block menu** - Shift-Enter: insert a new paragraph, heading, list, quote or code block after the selection, or turn the selection into another type.
 - **Key overview** - press `?` in an outline (or its small ? button) for a table of all keys; the *keys* tab shows the same. Every key is configurable in the settings tab with TW's shortcut editor.
 - **Transclusions** - a marker on `{{...}}` lines; Enter opens the target in outline mode.
