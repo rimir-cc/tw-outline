@@ -786,7 +786,13 @@ Tab / Shift-Tab and Alt-Up/Down while editing: like in selection mode, on the ed
 move the unit with its subtree, edit it again (at its new place) with the caret where it was. A refused save keeps the editor. With empty text the key is
 consumed and nothing changes.
 */
+// One undo step for the save and the operation (outline-undo.js)
 methods.editOperate = function(name, arg) {
+	var args = arguments;
+	return this.undoGroup(function() { return editOperateSteps.apply(this, args); });
+};
+
+function editOperateSteps(name, arg) {
 	var ed = this.editor;
 	if(!ed) {
 		return false;
@@ -819,7 +825,13 @@ is deleted and the editor goes to the end of the item above; its sub-items stay.
 same way. False (the key acts as usual) anywhere else: not at the start, not a list item, a multi-line item, the
 first item of a list, a new item with text.
 */
+// One undo step for the save and the operation (outline-undo.js)
 methods.editMerge = function() {
+	var args = arguments;
+	return this.undoGroup(function() { return editMergeSteps.apply(this, args); });
+};
+
+function editMergeSteps() {
 	var ed = this.editor,
 		caret = this.editorCaret(),
 		adapter = this.getAdapter();
@@ -876,7 +888,13 @@ before the caret stays, the text after it goes to a new item right below (a sibl
 item has sub-items), which is edited with the caret at its start. The inverse of the Backspace merge. False (Enter
 acts as usual: save and new) anywhere else.
 */
+// One undo step for the save and the operation (outline-undo.js)
 methods.editSplit = function() {
+	var args = arguments;
+	return this.undoGroup(function() { return editSplitSteps.apply(this, args); });
+};
+
+function editSplitSteps() {
 	var ed = this.editor,
 		caret = this.editorCaret(),
 		value = this.wiki.getTiddlerText(this.bufferTitle(), "");

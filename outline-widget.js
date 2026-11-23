@@ -28,6 +28,7 @@ var Widget = require("$:/core/modules/widgets/widget.js").widget,
 	keys = require("$:/plugins/rimir/outline/outline-keys.js"),
 	editor = require("$:/plugins/rimir/outline/outline-editor.js"),
 	menu = require("$:/plugins/rimir/outline/outline-menu.js"),
+	undo = require("$:/plugins/rimir/outline/outline-undo.js"),
 	dom = require("$:/plugins/rimir/outline/dom-utils.js");
 
 var MARKER_TIDDLER = "$:/plugins/rimir/outline/ui/transclusion-marker",
@@ -49,6 +50,7 @@ keys.install(OutlineWidget.prototype);
 editor.install(OutlineWidget.prototype);
 // Block menu (Shift-Enter): openMenu, closeMenu, handleMenuKeydown
 menu.install(OutlineWidget.prototype);
+undo.install(OutlineWidget.prototype);
 
 OutlineWidget.prototype.render = function(parent, nextSibling) {
 	this.parentDomNode = parent;
@@ -92,6 +94,7 @@ OutlineWidget.prototype.execute = function() {
 	this.pendingContinue = null;
 	this.markerHtml = null;
 	this.lastWritten = null;
+	this.undoGroupState = null;
 	this.makeChildWidgets();
 };
 

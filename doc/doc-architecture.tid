@@ -30,6 +30,7 @@ The tiddler is rendered unchanged. A JS widget, `$outline`, wraps the normal bod
 |`keys/*`, `ui/keys-table`, `keys.tid` |Key groups (caption, hint, list of shortcut names), the overview table, the keys tab |
 |`outline-editor.js` |In-place editor: temp tiddler, placeholder, save, continue, conflict handling |
 |`outline-menu.js` |Menus at the selection: block menu (Shift-Enter: insert / convert / edit) and delete confirmation (Delete); keyboard and mouse |
+|`outline-undo.js` |Undo/redo: every `writeText` records the text before and after plus the selection in `$:/temp/rimir/outline/undo/<title>`; `undoGroup` makes the save and the operation of a split, merge or editor move one step; undo writes only over the text it left |
 |`language/blocks.multids` |Labels of the block types and menu groups |
 |`ui/*` |Toolbar button and icon, body template and its filter, help bar (? button and overview), editor template, transclusion marker |
 |`styles.tid` |Selection frame and item box, compact editor, marker |

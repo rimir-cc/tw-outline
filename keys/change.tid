@@ -1,4 +1,4 @@
 title: $:/plugins/rimir/outline/key-groups/change
 caption: Change
-hint: In selection mode, on the selected block (double-click edits too). Moves, indents and deletes carry the children.
-list: outline-edit outline-menu outline-delete outline-open outline-move-up outline-move-down outline-indent outline-promote
+hint: In selection mode, on the selected block (double-click edits too). Moves, indents and deletes carry the children. Undo and redo cover the outline's own changes in this session.
+list: outline-edit outline-menu outline-delete outline-open outline-move-up outline-move-down outline-indent outline-promote outline-undo outline-redo

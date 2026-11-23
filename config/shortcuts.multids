@@ -23,3 +23,5 @@ outline-edit-down: ctrl-Down
 outline-help: shift-slash
 outline-delete: Delete
 outline-merge: Backspace
+outline-undo: ctrl-Z
+outline-redo: ctrl-Y ctrl-shift-Z

@@ -59,6 +59,8 @@ var ACTIONS = [
 	{name: "outline-move-down", run: function(w) { return w.operate("move", 1); }},
 	{name: "outline-indent", run: function(w) { return w.operate("indent"); }},
 	{name: "outline-promote", run: function(w) { return w.operate("promote"); }},
+	{name: "outline-undo", run: function(w) { return w.undoStep(true); }},
+	{name: "outline-redo", run: function(w) { return w.undoStep(false); }},
 	{name: "outline-help", char: "?", run: function(w) { return w.toggleHelp(); }}
 ];
 
@@ -376,8 +378,9 @@ methods.ensureCurrent = function() {
 	return !!tiddler && text === this.lastWritten && this.model.text === text && this.selectedId !== -1;
 };
 
-// Write `text` to the tiddler (one change) and remember it as this view's own last write
+// Write `text` to the tiddler (one change, one undo step: outline-undo.js) and remember it as this view's own last write
 methods.writeText = function(tiddler, text) {
+	this.recordWrite(tiddler ? (tiddler.fields.text || "") : "", text);
 	this.lastWritten = text;
 	this.wiki.addTiddler(new $tw.Tiddler(tiddler, {text: text}, this.wiki.getModificationFields()));
 };

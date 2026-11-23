@@ -11,7 +11,8 @@ Select, edit, move and indent the blocks of a wikitext tiddler in place. See the
 
 <$transclude $variable="rr-settings-section" title="Editor"><$fill $name="body">
 <$transclude $variable="rr-settings-row" label="Full editor" hint="Off (default): Enter opens a compact one-line field that grows with its text. On: the full text editor with toolbar."><$fill $name="body"><$macrocall $name="rr-config-checkbox" tid="$:/config/rimir/outline/full-editor" label="Use the full editor with toolbar"/></$fill></$transclude>
-<$transclude $variable="rr-settings-row" label="Quick delete" hint="On (default): list items without sub-items are deleted at once; everything else asks first (TW has no undo). Off: Delete always asks."><$fill $name="body"><$macrocall $name="rr-config-checkbox" tid="$:/config/rimir/outline/quick-delete-items" label="Delete list items without sub-items without asking" default="yes"/></$fill></$transclude>
+<$transclude $variable="rr-settings-row" label="Quick delete" hint="On (default): list items without sub-items are deleted at once; everything else asks first. Off: Delete always asks. Ctrl-Z undoes a delete either way."><$fill $name="body"><$macrocall $name="rr-config-checkbox" tid="$:/config/rimir/outline/quick-delete-items" label="Delete list items without sub-items without asking" default="yes"/></$fill></$transclude>
+<$transclude $variable="rr-settings-row" label="Undo steps" hint="How many changes made in the outline Ctrl-Z can take back, per tiddler (default 20). The history lives in a temp tiddler for this session only and is dropped when the tiddler is changed elsewhere."><$fill $name="body"><$macrocall $name="rr-config-input" tid="$:/config/rimir/outline/undo-depth" default="20" type="number" size="short"/></$fill></$transclude>
 </$fill></$transclude>
 
 <$transclude $variable="rr-settings-section" title="Display"><$fill $name="body">

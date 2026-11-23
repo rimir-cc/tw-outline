@@ -11,7 +11,7 @@ Tests for selection, configurable keys and structural operations of the $outline
 describe("outline selection and keys", function() {
 
 	var SEL = "$:/temp/rimir/outline/selection/",
-		KEYS = {up: 38, down: 40, left: 37, right: 39, tab: 9, escape: 27, enter: 13, del: 46};
+		KEYS = {z: 90, y: 89, up: 38, down: 40, left: 37, right: 39, tab: 9, escape: 27, enter: 13, del: 46};
 
 	// Shortcut config (shadows of the plugin) copied into each test wiki
 	function shortcutTiddlers() {
@@ -107,7 +107,8 @@ describe("outline selection and keys", function() {
 				"outline-parent": "Left", "outline-child": "Right", "outline-up-deep": "ctrl-Up", "outline-down-deep": "ctrl-Down", "outline-edit-up": "ctrl-Up", "outline-edit-down": "ctrl-Down",
 				"outline-open": "Enter", "outline-clear": "Escape", "outline-save": "ctrl-Enter",
 				"outline-continue": "Enter", "outline-newline": "shift-Enter", "outline-cancel": "Escape",
-				"outline-help": "shift-slash", "outline-delete": "Delete", "outline-merge": "Backspace"
+				"outline-help": "shift-slash", "outline-delete": "Delete", "outline-merge": "Backspace",
+				"outline-undo": "ctrl-Z", "outline-redo": "ctrl-Y ctrl-shift-Z"
 			};
 		Object.keys(expected).forEach(function(name) {
 			expect(name + "=" + wiki.getTiddlerText("$:/config/shortcuts/" + name)).toBe(name + "=" + expected[name]);
@@ -224,6 +225,72 @@ describe("outline selection and keys", function() {
 		expect(key(r, KEYS.del).prevented).toBe(true);
 		expect(r.widget.menu).toBe(null);
 		expect(r.wiki.getTiddlerText("T")).toBe("* a\n** a1\n* c");
+	});
+
+	it("undo and redo the outline's own changes, with the selection", function() {
+		var r = renderOutline(makeWiki([{title: "T", text: "* a\n* b\n** b1\n* c"}]), "T"),
+			items = function() { return r.widget.units.filter(function(e) { return e.unit.kind === "item"; }); };
+		r.widget.select(items()[1].unit.id);
+		key(r, KEYS.del);
+		key(r, KEYS.enter);
+		expect(r.wiki.getTiddlerText("T")).toBe("* a\n* c");
+		r.refresh();
+		key(r, KEYS.down, {alt: true});
+		expect(r.wiki.getTiddlerText("T")).toBe("* a\n* c");
+		r.widget.select(items()[1].unit.id);
+		key(r, KEYS.up, {alt: true});
+		expect(r.wiki.getTiddlerText("T")).toBe("* c\n* a");
+		r.refresh();
+		expect(key(r, KEYS.z, {ctrl: true}).prevented).toBe(true);
+		expect(r.wiki.getTiddlerText("T")).toBe("* a\n* c");
+		r.refresh();
+		key(r, KEYS.z, {ctrl: true});
+		expect(r.wiki.getTiddlerText("T")).toBe("* a\n* b\n** b1\n* c");
+		r.refresh();
+		expect(selectedSource(r)).toBe("* b");
+		// Nothing left to undo: the key is consumed, nothing changes
+		expect(key(r, KEYS.z, {ctrl: true}).prevented).toBe(true);
+		expect(r.wiki.getTiddlerText("T")).toBe("* a\n* b\n** b1\n* c");
+		key(r, KEYS.y, {ctrl: true});
+		expect(r.wiki.getTiddlerText("T")).toBe("* a\n* c");
+		r.refresh();
+		key(r, KEYS.z, {ctrl: true, shift: true});
+		expect(r.wiki.getTiddlerText("T")).toBe("* c\n* a");
+		r.refresh();
+		// A new change empties the redo list
+		key(r, KEYS.z, {ctrl: true});
+		r.refresh();
+		r.widget.select(items()[1].unit.id);
+		key(r, KEYS.tab);
+		expect(r.wiki.getTiddlerText("T")).toBe("* a\n** c");
+		key(r, KEYS.y, {ctrl: true});
+		expect(r.wiki.getTiddlerText("T")).toBe("* a\n** c");
+	});
+
+	it("undo drops a history that no longer fits, keeps the depth, does nothing read-only", function() {
+		var r = renderOutline(makeWiki([{title: "T", text: "* a\n* b\n* c"},
+			{title: "$:/config/rimir/outline/undo-depth", text: "2"}]), "T"),
+			moveFirstDown = function() {
+				r.refresh();
+				r.widget.select(r.widget.units.filter(function(e) { return e.unit.kind === "item"; })[0].unit.id);
+				key(r, KEYS.down, {alt: true});
+			};
+		moveFirstDown();
+		moveFirstDown();
+		moveFirstDown();
+		expect(r.wiki.getTiddlerText("T")).toBe("* b\n* a\n* c");
+		expect(JSON.parse(r.wiki.getTiddlerText("$:/temp/rimir/outline/undo/T")).undo.length).toBe(2);
+		r.refresh();
+		r.wiki.addTiddler({title: "$:/status/IsReadOnly", text: "yes"});
+		key(r, KEYS.z, {ctrl: true});
+		expect(r.wiki.getTiddlerText("T")).toBe("* b\n* a\n* c");
+		r.wiki.deleteTiddler("$:/status/IsReadOnly");
+		// Changed outside the outline: nothing is written, the history is gone
+		r.wiki.addTiddler(new $tw.Tiddler(r.wiki.getTiddler("T"), {text: "* b\n* a\n* c\n* d"}));
+		r.refresh();
+		key(r, KEYS.z, {ctrl: true});
+		expect(r.wiki.getTiddlerText("T")).toBe("* b\n* a\n* c\n* d");
+		expect(r.wiki.tiddlerExists("$:/temp/rimir/outline/undo/T")).toBe(false);
 	});
 
 	it("double-click edits the unit under the pointer, a transclusion its line", function() {

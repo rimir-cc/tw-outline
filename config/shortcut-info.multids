@@ -23,3 +23,5 @@ outline-edit-down: Outline editor: save and edit the next unit
 outline-help: Outline: show or hide the key overview
 outline-delete: Outline: delete the selected unit (asks first)
 outline-merge: Outline editor: at the start of a list item, merge it into the item above (an empty item is deleted)
+outline-undo: Outline: undo the last change made in the outline
+outline-redo: Outline: redo the last undone change

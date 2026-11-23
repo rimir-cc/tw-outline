@@ -24,6 +24,7 @@ type: text/vnd.tiddlywiki
 |`outline-indent` / `outline-promote` |Tab / shift-Tab |Demote / promote by one level |
 |`outline-edit` |Enter |Edit in place (on a transclusion Enter opens the target) |
 |`outline-delete` |Delete |Delete the unit with its subtree, after a confirmation menu (see Delete) |
+|`outline-undo` / `outline-redo` |ctrl-Z / ctrl-Y, ctrl-shift-Z |Undo / redo the last change made in the outline (see Undo) |
 |`outline-menu` |shift-Enter |Block menu: insert a new block after the unit, or turn it into another type; Up/Down, Enter runs, Escape closes |
 |`outline-open` |Enter |Open the transclusion target in outline mode |
 |`outline-clear` |Escape |Clear selection |
@@ -85,6 +86,12 @@ The unit goes with its subtree: an item with its sub-items, a heading with its s
 
 The first entry is active: Delete, Enter deletes; Escape cancels. List items without sub-items are deleted at once while `$:/config/rimir/outline/quick-delete-items` is `yes` (the default); `no` asks for them too. The model guard refuses a result that removes other units than these (e.g. two lists that would merge).
 
+!! Undo
+
+In selection mode Ctrl-Z takes back the last change made in the outline: a move, indent, delete, merge, split, conversion or saved edit; Ctrl-Y (or Ctrl-Shift-Z) does it again. The selection goes back to where it was before the change. A split or merge, and Tab / Alt-Up/Down while editing, save the edited text and change the structure in one step. Inside the editor Ctrl-Z is the text field's own undo.
+
+The history is kept per tiddler in `$:/temp/rimir/outline/undo/<title>` for the running session only, the last `$:/config/rimir/outline/undo-depth` steps (default 20). A new change empties the redo steps. Undo writes only while the tiddler still has the text the outline left: when it was changed elsewhere (another editor, a sync), the history is dropped and nothing is written. Read-only wikis: nothing.
+
 !! Merge (Backspace)
 
 In the editor, caret at the very start of a list item (nothing selected): the item's text goes to the end of the item above it in the list (the previous item in document order: the parent, or the last sub-item of the previous sibling), the item's line goes, its sub-items keep their lines and levels. The editor continues in the item above, at the join. An empty item is simply deleted (also one with sub-items) and the editor goes to the end of the item above; an empty new item is discarded the same way. The first item of a list, other units and multi-line items: a normal Backspace.
@@ -113,9 +120,10 @@ In the editor, caret inside a list item's text (not at its start or end, nothing
 
 |!Tiddler |!Purpose |
 |`$:/state/rimir/outline/on/<title>` |Outline mode on (`yes`) / off |
-|`$:/temp/rimir/outline/...` |Editor buffer, selection and open key overview (`help/<title>`) while active |
+|`$:/temp/rimir/outline/...` |Editor buffer, selection, open key overview (`help/<title>`) and undo history (`undo/<title>`, JSON) while active |
 |`$:/config/rimir/outline/badges` |Type badges: `all` (default), `headings` (h1–h6 only) or `off`. Sets class `rr-ol-badges-<mode>` on the frame; the badge text is the unit's `data-ol-type` |
 |`$:/config/rimir/outline/quick-delete-items` |`yes` (default): Delete removes list items without sub-items without asking; `no`: always ask |
+|`$:/config/rimir/outline/undo-depth` |Number of undo steps kept per tiddler (default 20) |
 |`$:/config/rimir/outline/full-editor` |`yes`: full text editor with toolbar; otherwise (default `no`) the compact one-line editor |
 
 </$fill>
