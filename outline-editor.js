@@ -640,7 +640,7 @@ methods.editorCaret = function() {
 A freshly opened editor starts with the caret at the end of the text (or at editor.caret, set by the caller), never
 with the text selected. The edit widget does this when it focuses; some browsers or plugins select the whole text
 on focus, and a double-click's own selection can move the caret afterwards. One tick later the caret is set again,
-unless something was typed meanwhile.
+unless a key was pressed (or something typed) meanwhile: the caret is then where the user put it.
 */
 methods.settleCaret = function() {
 	var ed = this.editor,
@@ -652,7 +652,7 @@ methods.settleCaret = function() {
 	setTimeout(function() {
 		var engine = self.editorEngine(),
 			node = engine && engine.domNode;
-		if(self.editor !== ed || !node || !node.setSelectionRange || node.value !== start || !ed.focused) {
+		if(self.editor !== ed || ed.keyed || !node || !node.setSelectionRange || node.value !== start || !ed.focused) {
 			return;
 		}
 		var caret = ed.caret || [node.value.length, node.value.length];
@@ -731,6 +731,8 @@ methods.handleEditorKeydown = function(event) {
 	if(!ed || event.defaultPrevented) {
 		return;
 	}
+	// Any key (Home, arrows, ...) places the caret itself: settleCaret leaves it alone
+	ed.keyed = true;
 	if(this.keyMatches(event, "outline-save")) {
 		this.saveEdit();
 	} else if(!ed.multiline && this.keyMatches(event, "outline-continue")) {
