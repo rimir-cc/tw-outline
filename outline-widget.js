@@ -32,6 +32,7 @@ var Widget = require("$:/core/modules/widgets/widget.js").widget,
 	dom = require("$:/plugins/rimir/outline/dom-utils.js");
 
 var MARKER_TIDDLER = "$:/plugins/rimir/outline/ui/transclusion-marker",
+	EMPTY_HINT = "$:/plugins/rimir/outline/language/block/empty-hint",
 	LIST_TAGS = {ul: true, ol: true, dl: true, blockquote: true},
 	// Kinds whose widgets may contain further units
 	DESCEND_KINDS = {list: true, item: true, container: true},
@@ -95,6 +96,7 @@ OutlineWidget.prototype.execute = function() {
 	this.markerHtml = null;
 	this.lastWritten = null;
 	this.undoGroupState = null;
+	this.emptyHint = null;
 	this.makeChildWidgets();
 };
 
@@ -168,7 +170,27 @@ OutlineWidget.prototype.mapUnits = function() {
 		self.stamp(entry);
 	});
 	this.restoreSelection();
+	this.showEmptyHint();
 	this.reattachEditor();
+};
+
+/*
+A tiddler without units (empty, or only whitespace and comments) has nothing to select: a hint says that Enter writes
+a first paragraph and Shift-Enter offers the block types. Not part of the body's widget tree; hidden while editing.
+*/
+OutlineWidget.prototype.showEmptyHint = function() {
+	var show = !this.hasSelectable() && !this.isReadOnly() && !!this.getAdapter();
+	if(show && !this.emptyHint) {
+		this.emptyHint = this.document.createElement("div");
+		this.emptyHint.className = "rr-ol-empty";
+		this.emptyHint.appendChild(this.document.createTextNode(this.wiki.getTiddlerText(EMPTY_HINT, "")));
+		this.domNode.appendChild(this.emptyHint);
+	} else if(!show && this.emptyHint) {
+		if(this.emptyHint.parentNode) {
+			this.emptyHint.parentNode.removeChild(this.emptyHint);
+		}
+		this.emptyHint = null;
+	}
 };
 
 // Remove stamps and markers of the previous mapping (DOM nodes that were not re-rendered keep them otherwise)

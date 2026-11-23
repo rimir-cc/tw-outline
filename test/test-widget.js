@@ -78,7 +78,8 @@ describe("outline widget", function() {
 		return html
 			.replace(/<span class="rr-ol-tmark"[^>]*>.*?<\/span>/g, "")
 			.replace(/ data-ol-[a-z]+="[^"]*"/g, "")
-			.replace(/ tabindex="0"/g, "");
+			.replace(/ tabindex="0"/g, "")
+			.replace(/<div class="rr-ol-empty">[^<]*<\/div>/g, "");
 	}
 
 	it("stamps units", function() {

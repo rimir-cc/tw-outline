@@ -24,7 +24,7 @@ The tiddler is rendered unchanged. A JS widget, `$outline`, wraps the normal bod
 |`model.js` |Collects units from the widget tree: start, end, kind, level, parent, siblings |
 |`text-utils.js`, `dom-utils.js` |Pure text helpers; DOM lookup shared by widget and editor |
 |`formats.js` |Registry of format adapters |
-|`format-wikitext.js` |Wikitext adapter: indent, promote, move, replace, insertNew, remove, deleteUnit, merge, editSource, isMultiline |
+|`format-wikitext.js` |Wikitext adapter: indent, promote, move (siblings, and across heading lines), replace, insertNew, insertBlock (after / before / at the end), convert, remove, deleteUnit, merge, split, editSource, isMultiline |
 |`outline-widget.js` |The `$outline` widget: unit-to-DOM mapping, stamps, selection, writes |
 |`outline-keys.js` |Key dispatch through `$:/config/shortcuts/outline-*`; toggles the key overview |
 |`keys/*`, `ui/keys-table`, `keys.tid` |Key groups (caption, hint, list of shortcut names), the overview table, the keys tab |

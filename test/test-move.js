@@ -40,13 +40,36 @@ describe("outline move", function() {
 	it("edge no-ops", function() {
 		expect(run("* a\n* b", "* a", -1)).toBe(null);
 		expect(run("* a\n* b", "* b", 1)).toBe(null);
-		expect(run("! H\n\np\n\n!! S\n\nq", "p", 1)).toBe(null);
 		expect(run("* a\n* b\n\np", "* b", 1)).toBe(null);
-		expect(run("intro\n\n! H\n\nx", "intro", 1)).toBe(null);
-		expect(run("intro\n\n! H\n\nx", "! H", -1)).toBe(null);
-		expect(run("! P\n\n!!! c\n\n!! d", "!! d", -1)).toBe(null);
+		expect(run("! A\n\n!! B", "!! B", -1)).toBe(null);
+		expect(run("! A\n\nx", "! A", 1)).toBe(null);
+		expect(run("<div>\n\np\n\n</div>\n\n! H", "p", 1)).toBe(null);
 		expect(run("* a\n*** c\n** d", "** d", -1)).toBe(null);
 	});
+	it("across heading lines", function() {
+		function both(text, s, dir, expected) {
+			var r = run(text, s, dir), m = build(text);
+			expect(r && r.text).withContext(s + " " + dir).toBe(expected);
+			expect(r.cross).toBe(true);
+			expect(model.checkOp($tw.wiki, m, idOf(m, s), "move", r.text)).toBe(true);
+			expect(r.text.substring(r.select, r.select + s.length)).toBe(s);
+			return r;
+		}
+		// A block into the next section and back
+		both("! H\n\np\n\n!! S\n\nq", "p", 1, "! H\n\n!! S\n\np\n\nq");
+		both("! H\n\n!! S\n\np\n\nq", "p", -1, "! H\n\np\n\n!! S\n\nq");
+		both("! A\n\nx\n\n! C\n\nz", "x", 1, "! A\n\n! C\n\nx\n\nz");
+		both("intro\n\n! H\n\nx", "intro", 1, "! H\n\nintro\n\nx");
+		// A heading up over a block or a deeper heading: they join its section
+		both("intro\n\n! H\n\nx", "! H", -1, "! H\n\nintro\n\nx");
+		both("para\n\n* l\n\n! New", "! New", -1, "para\n\n! New\n\n* l");
+		both("! P\n\n!!! c\n\n!! d", "!! d", -1, "! P\n\n!! d\n\n!!! c");
+		// A heading down over a higher one: its section becomes a sub-section
+		both("!! B\n\ny\n\n! A", "!! B", 1, "! A\n\n!! B\n\ny");
+		// A comment between them stays between them
+		both("! A\n\nx\n\n<!-- c -->\n\n! C", "x", 1, "! A\n\n! C\n\n<!-- c -->\n\nx");
+	});
+
 	it("container", function() {
 		var t = "<div>\n\np1\n\np2\n\n</div>";
 		expect(run(t, "p1", 1).text).toBe("<div>\n\np2\n\np1\n\n</div>");
@@ -117,6 +140,12 @@ describe("outline move", function() {
 					if(!r) { return; }
 					moved++;
 					var m2 = build(r.text);
+					if(r.cross) {
+						// Across a heading line: same units, guard passes (no sibling to compare with)
+						expect(m2.units.length).withContext(k + " " + u.id).toBe(m.units.length);
+						expect(model.checkOp($tw.wiki, m, u.id, "move", r.text)).withContext(k + " " + u.id + " " + dir).toBe(true);
+						return;
+					}
 					expect(m2.units.length).withContext(k + " " + u.id).toBe(m.units.length);
 					function ks(mm) { return mm.units.map(function(x) { return x.kind + ":" + x.level; }).sort(); }
 					expect(ks(m2)).toEqual(ks(m));

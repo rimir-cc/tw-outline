@@ -165,4 +165,14 @@ describe("outline delete and merge", function() {
 		var t = "* a\n** a1\n*** a2\n* b", m = build(t), a = idOf(m, "* a");
 		expect(m.text.substring(m.units[fmt.itemBefore(m, a, m.units[a].subtreeEnd)].start).indexOf("*** a2")).toBe(0);
 	});
+	it("a heading or paragraph turned into a bullet joins a list next to it", function() {
+		function conv(text, src, type) {
+			var m = build(text);
+			return fmt.convert(text, m, idOf(m, src), type);
+		}
+		expect(conv("! H\n* a\n* b", "! H", "bulleted").text).toBe("* H\n\n* a\n* b");
+		expect(conv("! H\n\n* a", "! H", "numbered").text).toBe("# H\n\n* a");
+		expect(conv("* z\n\npara\n\n* a", "para", "bulleted").text).toBe("* z\n\n* para\n\n* a");
+		expect(conv("! H\n\npara", "! H", "bulleted").text).toBe("* H\n\npara");
+	});
 });

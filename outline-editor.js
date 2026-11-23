@@ -4,7 +4,8 @@ type: application/javascript
 module-type: library
 
 In-place editor of the $outline widget. install(proto) adds these methods to the widget prototype:
-  startEdit(id, {isNew})       - open the editor for unit `id` (isNew: for a new unit after unit `id`)
+  startEdit(id, {isNew, blockType, where}) - open the editor for unit `id`; isNew: for a new unit after unit `id`
+                               (where "before": before it; where "end": at the end of a tiddler without units, id -1)
   saveEdit({continue})         - write the edit once; continue: open a new unit after the saved one
   cancelEdit()                 - discard the edit
   insertNewline()              - insert a line break at the caret through the engine
@@ -78,7 +79,7 @@ function ownersOf(wiki) {
 }
 
 // Editor state for unit kind `unitKind` (for a new unit: the anchor's kind); id and multiline are set by the caller
-function editorState(unitKind, isNew, origSource, origStart, origText, blockType, adapter) {
+function editorState(unitKind, isNew, origSource, origStart, origText, blockType, adapter, where) {
 	var typeKind = isNew && blockType && adapter && adapter.blockTypeKind ? adapter.blockTypeKind(blockType) : null;
 	return {
 		host: null,
@@ -89,7 +90,9 @@ function editorState(unitKind, isNew, origSource, origStart, origText, blockType
 		blockType: typeKind ? blockType : "",
 		kind: typeKind || (isNew ? (unitKind === "item" ? "item" : "block") : unitKind),
 		unitKind: unitKind,
-		placement: isNew ? "after" : (unitKind === "item" ? "inside" : "before"),
+		// A new unit goes "after" its anchor (default), "before" it, or at the "end" of the text (no anchor)
+		where: isNew ? (where || "after") : "",
+		placement: isNew ? (where === "before" ? "before" : "after") : (unitKind === "item" ? "inside" : "before"),
 		origSource: origSource,
 		origStart: origStart,
 		origText: origText,
@@ -147,14 +150,16 @@ methods.startEdit = function(id, opts) {
 		}
 		id = this.selectedId;
 	}
-	if(!this.isSelectable(id)) {
+	var atEnd = !!opts.isNew && opts.where === "end";
+	if(atEnd ? this.hasSelectable() : !this.isSelectable(id)) {
 		return false;
 	}
-	var unit = this.units[id].unit,
+	var unit = atEnd ? {kind: "", start: 0, end: 0} : this.units[id].unit,
 		isNew = !!opts.isNew,
 		adapter = this.getAdapter(),
 		ed = editorState(unit.kind, isNew, this.model.text.substring(unit.start, unit.end), unit.start, this.model.text,
-			opts.blockType, adapter);
+			opts.blockType, adapter, opts.where);
+	id = atEnd ? -1 : id;
 	ed.id = id;
 	ed.multiline = isNew ? ed.blockType === "code" : adapter.isMultiline(this.model, id);
 	this.editor = ed;
@@ -168,7 +173,8 @@ methods.startEdit = function(id, opts) {
 		"outline-orig-text": ed.origText,
 		"outline-is-new": isNew ? "yes" : "no",
 		"outline-unit-kind": ed.unitKind,
-		"outline-block-type": ed.blockType
+		"outline-block-type": ed.blockType,
+		"outline-insert": ed.where
 	}));
 	this.placeEditor(true);
 	// Only when opening: a re-attached editor (after a re-render) keeps its caret
@@ -191,13 +197,14 @@ methods.restoreEditor = function() {
 		hints = registryOf(restoreHints, this.wiki),
 		hint = hints[title] || {},
 		ed = editorState(f["outline-unit-kind"] || "", f["outline-is-new"] === "yes", f["outline-orig-source"] || "",
-			parseInt(f["outline-orig-start"], 10), f["outline-orig-text"] || "", f["outline-block-type"], this.getAdapter());
+			parseInt(f["outline-orig-start"], 10), f["outline-orig-text"] || "", f["outline-block-type"], this.getAdapter(),
+			f["outline-insert"]);
 	delete hints[title];
 	this.editor = ed;
 	ownersOf(this.wiki)[title] = this;
 	var target = this.locateEditUnit(this.model.text);
 	ed.id = target && this.isSelectable(target.id) ? target.id : -1;
-	if(ed.id === -1) {
+	if(ed.id === -1 && !(target && ed.where === "end")) {
 		ed.notice = "conflict";
 	}
 	ed.multiline = ed.isNew ? ed.blockType === "code" :
@@ -244,7 +251,7 @@ DOM nodes the editor host goes before, into or after. A new block that is insert
 methods.editAnchorNodes = function() {
 	var ed = this.editor,
 		adapter = this.getAdapter();
-	if(ed.isNew && ed.blockType && adapter && adapter.insertsAfterSubtree(this.model, ed.id, ed.blockType)) {
+	if(ed.isNew && ed.where === "after" && ed.blockType && adapter && adapter.insertsAfterSubtree(this.model, ed.id, ed.blockType)) {
 		var last = this.lastSectionNode(ed.id);
 		if(last) {
 			return [last];
@@ -372,7 +379,7 @@ methods.trackEngineFocus = function() {
 methods.hideEdited = function() {
 	var ed = this.editor;
 	this.unhideEdited();
-	if(ed.placement === "after" || ed.id === -1) {
+	if(ed.isNew || ed.placement === "after" || ed.id === -1) {
 		return;
 	}
 	var cls = ed.placement === "inside" ? EDITING_OWN_CLASS : EDITING_CLASS;
@@ -476,7 +483,7 @@ methods.saveEdit = function(opts) {
 	}
 	var result;
 	if(ed.isNew && ed.blockType) {
-		result = adapter.insertBlock(current, target.model, target.id, ed.blockType, newSource);
+		result = adapter.insertBlock(current, target.model, target.id, ed.blockType, newSource, ed.where);
 		if(!result) {
 			this.closeEditor(true);
 			dom.focus(this.domNode);
@@ -500,7 +507,7 @@ methods.saveEdit = function(opts) {
 		result = adapter.replace(current, target.model, target.id, newSource.replace(/\r?\n/g, utils.eol(current)));
 	}
 	var kind = ed.kind,
-		index = ed.isNew ? target.id + 1 : target.id;
+		index = ed.isNew && ed.where === "after" ? target.id + 1 : Math.max(0, target.id);
 	this.closeEditor(true);
 	dom.focus(this.domNode);
 	var written = result.text !== current;
@@ -527,6 +534,10 @@ original own source; none or several -> null.
 methods.locateEditUnit = function(text) {
 	var ed = this.editor,
 		m = this.model && this.model.text === text ? this.model : model.buildModel(this.wiki, text, this.tiddlerTitle);
+	if(ed.where === "end") {
+		// Appended at the end: no anchor to find
+		return {model: m, id: -1};
+	}
 	if(text === ed.origText) {
 		var same = model.findUnit(m, ed.origStart, ed.unitKind);
 		return same === -1 ? null : {model: m, id: same};
@@ -935,10 +946,10 @@ methods.editAtEnd = function() {
 	this.focusEditor();
 };
 
-// Select-mode Shift-Enter
+// Select-mode Enter. In a tiddler without units: a first paragraph at the end of the text
 methods.editSelected = function() {
 	if(this.selectedId === -1) {
-		return false;
+		return !this.hasSelectable() && this.startEdit(-1, {isNew: true, blockType: "paragraph", where: "end"});
 	}
 	this.startEdit(this.selectedId);
 	return true;

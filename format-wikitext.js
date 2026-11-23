@@ -83,21 +83,67 @@ Items and headings keep the separators as they are. Other blocks that touch (sin
 between them and before the content after the pair, because after the swap a paragraph would otherwise absorb the
 block after it. Non-whitespace between the blocks (a comment) is kept and set apart by blank lines.
 */
+/*
+Alt-Up/Down. Siblings swap with their subtrees: items and headings only with one of the same kind and level, other
+blocks with other blocks. Across a heading line ("cross", block level only, not out of a container):
+- a heading moves up over the block or deeper heading above it (its line goes above, that block joins its section);
+- a heading moves down over a following higher heading (its section goes below that line and becomes a sub-section);
+- a block moves down over the next heading line (into that section) and up over its section's heading line.
+Whole blocks are set apart by blank lines. The result has the moved unit's new start (select) and cross: true for a
+move across a heading line.
+*/
 exports.move = function(text, model, id, dir) {
 	var u = model.units[id];
 	if(!u || (dir !== -1 && dir !== 1)) { return null; }
 	var sibs = u.parent === -1 ? model.roots : model.units[u.parent].children,
-		i = sibs.indexOf(id), n = sibs[i + dir];
-	if(i < 0 || n === undefined) { return null; }
-	var o = model.units[n];
-	if((o.kind === "heading") !== (u.kind === "heading")) { return null; }
-	if((u.kind === "heading" || u.kind === "item") && (o.kind !== u.kind || o.level !== u.level)) { return null; }
+		i = sibs.indexOf(id), o = model.units[sibs[i + dir]];
+	if(i < 0) { return null; }
+	if(u.kind === "item") {
+		if(!o || o.kind !== "item" || o.level !== u.level) { return null; }
+		return swap(text, o, u, dir, false);
+	}
+	if(u.kind === "heading") {
+		if(o && o.kind === "heading" && o.level === u.level) {
+			return swap(text, o, u, dir, false);
+		}
+		if(dir < 0 && o && (o.kind !== "heading" || o.level > u.level)) {
+			return swapRanges(text, o.start, o.subtreeEnd, u.start, u.end, o.start, true);
+		}
+		if(dir > 0 && o && o.kind === "heading" && o.level < u.level) {
+			return swapRanges(text, u.start, u.subtreeEnd, o.start, o.end, -1, true);
+		}
+		return null;
+	}
+	if(o && o.kind !== "heading") {
+		return swap(text, o, u, dir, true);
+	}
+	if(dir > 0) {
+		var h = o || nextHeading(model, u);
+		return h ? swapRanges(text, u.start, u.subtreeEnd, h.start, h.end, -1, true) : null;
+	}
+	var p = !o && u.parent !== -1 ? model.units[u.parent] : null;
+	return p && p.kind === "heading" ? swapRanges(text, p.start, p.end, u.start, u.subtreeEnd, p.start, true) : null;
+};
+
+// Swap sibling u with its neighbour o (dir -1: o is above) with their subtrees
+function swap(text, o, u, dir, blocks) {
 	var a = dir < 0 ? o : u, b = dir < 0 ? u : o,
-		A = text.substring(a.start, a.subtreeEnd),
-		sep = text.substring(a.subtreeEnd, b.start),
-		B = text.substring(b.start, b.subtreeEnd),
-		rest = text.substring(b.subtreeEnd);
-	if(u.kind !== "item" && u.kind !== "heading") {
+		r = swapRanges(text, a.start, a.subtreeEnd, b.start, b.subtreeEnd, dir < 0 ? a.start : -1, blocks);
+	delete r.cross;
+	return r;
+}
+
+/*
+Swap range A [a0, a1) with the later range B [b0, b1): A's text goes where B was and vice versa. `select`: the moved
+unit's new start, -1 when it is A's text (it then starts after B's text and the separator). `blocks`: set the two
+apart, and the text after them, by blank lines (anything between them, e.g. a comment, stays between them).
+*/
+function swapRanges(text, a0, a1, b0, b1, select, blocks) {
+	var A = text.substring(a0, a1),
+		sep = text.substring(a1, b0),
+		B = text.substring(b0, b1),
+		rest = text.substring(b1);
+	if(blocks) {
 		var nl = utils.eol(text),
 			gap = /^(?:[ \t]*\r?\n)*/.exec(rest)[0];
 		if(/\S/.test(sep)) {
@@ -112,10 +158,31 @@ exports.move = function(text, model, id, dir) {
 		}
 	}
 	return {
-		text: text.substring(0, a.start) + B + sep + A + rest,
-		select: dir < 0 ? a.start : a.start + B.length + sep.length
+		text: text.substring(0, a0) + B + sep + A + rest,
+		select: select === -1 ? a0 + B.length + sep.length : select,
+		cross: true
 	};
-};
+}
+
+// The heading that starts right after block u in document order, in the same container (or at the root); or null
+function nextHeading(model, u) {
+	var next = null;
+	model.units.forEach(function(x) {
+		if(x.start >= u.subtreeEnd && (!next || x.start < next.start)) {
+			next = x;
+		}
+	});
+	return next && next.kind === "heading" && sectionRoot(model, next) === sectionRoot(model, u) ? next : null;
+}
+
+// The nearest ancestor of u that is not a heading (a container), or -1
+function sectionRoot(model, u) {
+	var p = u.parent;
+	while(p !== -1 && model.units[p].kind === "heading") {
+		p = model.units[p].parent;
+	}
+	return p;
+}
 
 // Replace the unit's own source with newSource
 /*
@@ -220,13 +287,29 @@ exports.insertsAfterSubtree = function(model, id, type) {
 	return !!u && !(u.kind === "heading" && exports.blockTypeKind(type) !== "heading");
 };
 
-// Insert a new block of `type` with `content` after unit `id` (see insertsAfterSubtree); null for blank content
-exports.insertBlock = function(text, model, id, type, content) {
+/*
+Insert a new block of `type` with `content`. `where`: "after" (default) unit `id` (see insertsAfterSubtree), "before"
+it (it ends the section above), or "end" of the text (`id` is ignored: the first block of an empty tiddler). Not
+next to a single list item. Null for blank content.
+*/
+exports.insertBlock = function(text, model, id, type, content, where) {
 	var u = model.units[id], t = BLOCK_TYPES[type];
-	if(!u || !t || u.kind === "item" || !content || !content.trim()) { return null; }
-	var nl = utils.eol(text);
+	if(!t || !content || !content.trim()) { return null; }
+	var nl = utils.eol(text), result;
 	content = content.replace(/\r?\n/g, nl);
-	var result = insertBlockAt(text, exports.insertsAfterSubtree(model, id, type) ? u.subtreeEnd : u.end, t.make(content, nl));
+	if(where === "end") {
+		var head = text.replace(/\s+$/, ""),
+			prefix = /\S/.test(head) ? head + nl + nl : "";
+		result = {text: prefix + t.make(content, nl), select: prefix.length};
+	} else if(!u || u.kind === "item") {
+		return null;
+	} else if(where === "before") {
+		var before = text.substring(0, u.start),
+			lead = !/\S/.test(before) || /\n[ \t]*\r?\n[ \t]*$/.test(before) ? "" : (/\n[ \t]*$/.test(before) ? nl : nl + nl);
+		result = {text: utils.splice(text, u.start, u.start, lead + t.make(content, nl) + nl + nl), select: u.start + lead.length};
+	} else {
+		result = insertBlockAt(text, exports.insertsAfterSubtree(model, id, type) ? u.subtreeEnd : u.end, t.make(content, nl));
+	}
 	result.kind = t.kind;
 	return result;
 };
@@ -271,6 +354,17 @@ exports.convertTypes = function(model, id) {
 		return !(type === "paragraph" && u.tag === "p") && !(u.kind === "heading" && /^heading/.test(type));
 	});
 };
+
+// True when unit u has `count` list neighbours (the previous and next unit at its level, by document order) to join
+function joinsNeighbours(model, u, count) {
+	var sibs = u.parent === -1 ? model.roots : model.units[u.parent].children,
+		i = sibs.indexOf(u.id),
+		prev = model.units[sibs[i - 1]],
+		// A heading's section follows it: its next neighbour is its first child
+		next = u.kind === "heading" && u.children.length ? model.units[u.children[0]] : model.units[sibs[i + 1]],
+		lists = [prev, next].filter(function(x) { return x && x.kind === "list"; }).length;
+	return lists >= count;
+}
 
 // Replace the * or # at marker position `index` (-1: every position) with `ch` in `items`; null when nothing changes
 function switchMarkers(text, items, index, ch) {
@@ -331,10 +425,14 @@ exports.convert = function(text, model, id, type) {
 		kind = BLOCK_TYPES[type].kind;
 	}
 	if(newText === null || newText === text) { return null; }
-	// A block that becomes a list item also gets its list unit
+	// A block that becomes a list item also gets its list unit, unless it joins a list right above or below it (TW
+	// continues a list over blank lines): one list less for each neighbour it joins
 	var parsed = outlineModel.buildModel($tw.wiki, newText),
-		expected = model.units.length + (kind === "item" && u.kind !== "item" && u.kind !== "list" ? 1 : 0);
-	if(parsed.units.length !== expected || outlineModel.findUnit(parsed, start, kind) === -1) {
+		toItem = kind === "item" && u.kind !== "item" && u.kind !== "list",
+		expected = model.units.length + (toItem ? 1 : 0),
+		joined = toItem ? expected - parsed.units.length : 0;
+	if((joined !== 0 && !(joined > 0 && joined <= 2 && joinsNeighbours(model, u, joined))) ||
+		outlineModel.findUnit(parsed, start, kind) === -1) {
 		return null;
 	}
 	return {text: newText, select: start, kind: kind};

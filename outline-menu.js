@@ -13,8 +13,9 @@ install(proto) adds these methods to the widget prototype:
   closeMenu()           - remove it
   handleMenuKeydown(e)  - Up/Down/Home/End move, Enter runs, Escape closes; true when consumed
 
-Block menu entries, in two groups: "Insert after" (a new block of a type, edited at once; not for single list items)
-and "Turn into" (the adapter's convertTypes for the unit). On a transclusion the first entry edits the line itself.
+Block menu entries, in three groups: "Insert after" and "Insert before" (a new block of a type, edited at once; not
+for single list items) and "Turn into" (the adapter's convertTypes for the unit). In a tiddler without units the menu
+only inserts (at the end of the text). On a transclusion the first entry edits the line itself.
 Delete confirmation: "Yes" (with the count of what goes along), on a heading with a section also "Just the heading",
 and "Cancel". Childless list items are deleted without asking when $:/config/rimir/outline/quick-delete-items is yes.
 Labels are the tiddlers $:/plugins/rimir/outline/language/block/<key>.
@@ -31,20 +32,27 @@ var LABEL_PREFIX = "$:/plugins/rimir/outline/language/block/",
 
 var methods = {};
 
-// Block menu entries for unit `id`: [{group, action: "insert"|"convert"|"edit", type}]
+// Block menu entries for unit `id` (-1: a tiddler without units): [{group, action: "insert"|"convert"|"edit", type, where}]
 methods.menuEntries = function(id) {
 	var adapter = this.getAdapter(),
-		unit = this.units[id].unit,
 		entries = [];
 	if(!adapter) {
 		return entries;
 	}
+	if(id === -1) {
+		return INSERT_TYPES.map(function(type) {
+			return {group: "group-insert", action: "insert", type: type, where: "end"};
+		});
+	}
+	var unit = this.units[id].unit;
 	if(unit.kind === "transclusion") {
 		entries.push({group: "", action: "edit", type: "edit"});
 	}
 	if(unit.kind !== "item") {
-		INSERT_TYPES.forEach(function(type) {
-			entries.push({group: "group-insert", action: "insert", type: type});
+		["after", "before"].forEach(function(where) {
+			INSERT_TYPES.forEach(function(type) {
+				entries.push({group: where === "after" ? "group-insert" : "group-insert-before", action: "insert", type: type, where: where});
+			});
 		});
 	}
 	adapter.convertTypes(this.model, id).forEach(function(type) {
@@ -60,6 +68,10 @@ methods.label = function(key) {
 methods.openMenu = function() {
 	var id = this.selectedId;
 	this.closeMenu();
+	if(id === -1 && !this.editor && !this.isReadOnly() && !this.hasSelectable()) {
+		this.showMenu(-1, this.menuEntries(-1));
+		return true;
+	}
 	if(id === -1 || this.editor || this.isReadOnly() || !this.ensureCurrent()) {
 		return id !== -1;
 	}
@@ -157,7 +169,7 @@ methods.showMenu = function(id, entries) {
 // Below the selected unit's first DOM node, inside the (position: relative) outline container
 methods.positionMenu = function() {
 	var menu = this.menu,
-		anchor = this.units[menu.id].domNodes[0];
+		anchor = menu.id === -1 ? this.emptyHint : this.units[menu.id].domNodes[0];
 	if(!anchor || !anchor.getBoundingClientRect || !this.domNode.getBoundingClientRect) {
 		return;
 	}
@@ -193,7 +205,7 @@ methods.runMenuEntry = function(index) {
 	}
 	var id = menu.id;
 	this.closeMenu();
-	if(id !== this.selectedId) {
+	if(id !== -1 && id !== this.selectedId) {
 		this.select(id);
 	}
 	dom.focus(this.domNode);
@@ -204,7 +216,7 @@ methods.runMenuEntry = function(index) {
 	} else if(entry.action === "edit") {
 		this.startEdit(id);
 	} else if(entry.action === "insert") {
-		this.startEdit(id, {isNew: true, blockType: entry.type});
+		this.startEdit(id, {isNew: true, blockType: entry.type, where: entry.where});
 	} else {
 		this.operate("convert", entry.type);
 	}

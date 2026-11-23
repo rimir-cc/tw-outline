@@ -127,6 +127,15 @@ methods.resolveSelection = function() {
 	return this.nearestSelectable(index);
 };
 
+methods.hasSelectable = function() {
+	for(var i = 0; i < this.units.length; i++) {
+		if(this.isSelectable(i)) {
+			return true;
+		}
+	}
+	return false;
+};
+
 // `index` itself if selectable, else the next selectable unit after it, else the one before it
 methods.nearestSelectable = function(index) {
 	var i;

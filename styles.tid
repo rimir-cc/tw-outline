@@ -113,6 +113,18 @@ tags: $:/tags/Stylesheet
 	margin-bottom: 0.2em;
 }
 
+/* Hint in a tiddler without units (Enter / Shift-Enter start the first block) */
+.rr-ol-empty {
+	padding: 0.4em 0;
+	color: <<colour muted-foreground>>;
+	font-style: italic;
+	cursor: text;
+}
+
+.rr-ol-is-editing .rr-ol-empty {
+	display: none;
+}
+
 /* Block menu (Shift-Enter) */
 .rr-ol-menu {
 	position: absolute;

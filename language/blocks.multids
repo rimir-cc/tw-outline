@@ -10,6 +10,8 @@ quote: Quote
 code: Code block
 edit: Edit this line
 group-insert: Insert after
+group-insert-before: Insert before
+empty-hint: Empty. Enter writes a first paragraph, Shift-Enter offers headings, lists and other blocks.
 group-convert: Turn into
 group-delete: Delete?
 delete: Yes, delete

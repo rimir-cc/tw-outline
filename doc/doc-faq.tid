@@ -22,9 +22,13 @@ Wikitext tiddlers (`text/vnd.tiddlywiki`) that are not drafts, system tiddlers, 
 
 In the view toolbar, per tiddler. State is `$:/state/rimir/outline/on/<title>`.
 
+!! How do I put a heading above a list or paragraph?
+
+Select the list (or paragraph, or lower heading), Shift-Enter, and pick a heading under //Insert before//. Or insert it anywhere after and press Alt-Up: a heading moves up over the blocks above it.
+
 !! Can I move a unit into another list or section?
 
-Not yet. Moves stay inside the parent: at the first or last child, Alt-Up/Down do nothing. Moving across parents is a planned follow-up.
+Across heading lines, yes: a paragraph or list at the end of a section moves down into the next section, the first block of a section moves up out of it, and a heading moves up over the blocks above it (they join its section). List items stay in their list and blocks stay in their HTML container.
 
 !! Are widgets and macros editable inside?
 
@@ -62,7 +66,7 @@ A comment (or other text that is not a unit) between the two blocks is kept and 
 
 !! Why does Alt-Up/Down sometimes do nothing?
 
-A move only swaps a unit with its neighbour inside the same parent, and only with a neighbour of the same class (heading with heading of the same level, item with item of the same level, other blocks with other blocks). Before writing, outline re-parses the result; if the swap would change the units (for example a heading section whose last paragraph would merge with the next block), the move is refused and the text stays unchanged. Add a blank line between the blocks by hand and try again.
+A move swaps a unit with its neighbour inside the same parent (an item only with an item of the same level, a heading with a heading of the same level) or moves it across one heading line (see the reference); at the first or last place there is nothing to move over. Before writing, outline re-parses the result; if the swap would change the units (for example a heading section whose last paragraph would merge with the next block), the move is refused and the text stays unchanged. Add a blank line between the blocks by hand and try again.
 
 !! Do Tab and Alt-Up/Down work while I edit?
 

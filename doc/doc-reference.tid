@@ -75,6 +75,14 @@ Swap the unit's whole subtree with the adjacent sibling's whole subtree, blank-l
 * Heading: siblings are headings of the same level in the same parent.
 * Other blocks: siblings are blocks in the same section (or HTML container, or root) before any sub-heading.
 
+Across heading lines (blocks of a section, never out of an HTML container):
+
+* A heading moves up over the block or deeper heading above it: its line goes above that block, which joins its section (`para`, `! New` → `! New`, `para`).
+* A heading moves down over a following higher heading: its section goes below that heading's line and becomes a sub-section (`!! B`, `y`, `! A` → `! A`, `!! B`, `y`).
+* A block (paragraph, list, ...) at the end of a section moves down over the next heading line into that section; as the first block of a section it moves up over the heading line out of it. The two are each other's inverse.
+
+A heading moving down over a heading of the same level swaps the two sections, as before; one with blocks under it does not move down over them (use Alt-Up on the block, or on the next heading).
+
 !! Delete
 
 The unit goes with its subtree: an item with its sub-items, a heading with its section, a list with its items, a container with its contents. An only item takes its list along and an only child its container (neither can stay empty). Separators as for a blank save: one blank line stays between the neighbours. The selection goes to the unit that now starts there.
@@ -100,6 +108,10 @@ In the editor, caret at the very start of a list item (nothing selected): the it
 
 In the editor, caret inside a list item's text (not at its start or end, nothing selected): the text before the caret stays in the item, the text after it goes to a new item directly below, which is edited with the caret at its start. The new item is a sibling with the same marker; when the item has sub-items it becomes their first one, so the sub-items stay with the item. Backspace at the new item's start (merge) gives back the original line.
 
+!! Empty tiddler
+
+A tiddler without units (empty, or only whitespace and comments) shows a hint. Enter opens the editor for a first paragraph, Shift-Enter the block menu with the insert types only; the block goes at the end of the text.
+
 !! New unit (Enter)
 
 * List item: same marker, after the item's whole subtree.
@@ -108,7 +120,9 @@ In the editor, caret inside a list item's text (not at its start or end, nothing
 
 !! Block menu
 
-|!Selected |!Insert after |!Turn into |
+Insert before offers the same types as Insert after and puts the block directly above the selected unit (it ends the section above; above a list or a lower heading this is the way to put a heading in front of it). Turning a paragraph or heading into a bulleted or numbered item next to a list of that type joins that list (TW continues a list over blank lines).
+
+|!Selected |!Insert after / before |!Turn into |
 |Paragraph |Paragraph, Heading 1–3, Bulleted/Numbered list, Quote, Code block |Heading 1–3, Bulleted/Numbered list, Quote, Code block |
 |Heading |the same (a heading goes after the section, other blocks right below the heading) |Paragraph, Bulleted/Numbered list, Quote, Code block |
 |Code block |the same |Paragraph, Bulleted/Numbered list, Quote |

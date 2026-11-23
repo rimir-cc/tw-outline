@@ -332,10 +332,13 @@ describe("outline editor", function() {
 			var r = render("para\n\n* a\n* b");
 			r.widget.select(r.idOf("para"));
 			expect(press(r, 13, {shift: true}).prevented).toBe(true);
-			expect(labels(r)).toEqual(["insert:paragraph", "insert:heading1", "insert:heading2", "insert:heading3",
-				"insert:bulleted", "insert:numbered", "insert:quote", "insert:code",
+			var inserts = ["insert:paragraph", "insert:heading1", "insert:heading2", "insert:heading3",
+				"insert:bulleted", "insert:numbered", "insert:quote", "insert:code"];
+			expect(labels(r)).toEqual(inserts.concat(inserts, [
 				"convert:heading1", "convert:heading2", "convert:heading3", "convert:bulleted", "convert:numbered",
-				"convert:quote", "convert:code"]);
+				"convert:quote", "convert:code"]));
+			expect(r.widget.menu.entries[8].group).toBe("group-insert-before");
+			expect(r.widget.menu.entries[8].where).toBe("before");
 			expect(hasClass(r.widget.menu.node, "rr-ol-menu")).toBe(true);
 			// Escape closes, nothing written
 			press(r, 27);
@@ -388,6 +391,60 @@ describe("outline editor", function() {
 			r.type("G");
 			r.widget.saveEdit();
 			expect(r.text()).toBe("! H\n\ntext\n\n! G\n\n! I");
+		});
+
+		it("insert before: the new block goes right above the unit, its editor too", function() {
+			var r = render("intro\n\n* a\n* b\n\n!! S\n\nx");
+			function before(id, type) {
+				r.widget.select(id);
+				press(r, 13, {shift: true});
+				var i = r.widget.menu.entries.findIndex(function(e) { return e.where === "before" && e.type === type; });
+				r.widget.setMenuActive(i);
+				press(r, 13);
+			}
+			before(r.idOf("* a\n* b"), "heading1");
+			var listNode = r.widget.units[r.idOf("* a\n* b")].domNodes[0];
+			expect(siblings(listNode).indexOf(r.widget.editor.host)).toBe(siblings(listNode).indexOf(listNode) - 1);
+			// The unit stays visible
+			expect(hasClass(listNode, "rr-ol-editing")).toBe(false);
+			r.type("Top");
+			r.widget.saveEdit();
+			expect(r.text()).toBe("intro\n\n! Top\n\n* a\n* b\n\n!! S\n\nx");
+			r.refresh();
+			expect(r.widget.units[r.widget.selectedId].unit.kind).toBe("heading");
+			// Before a lower heading, and before the first block
+			before(r.idOf("!! S"), "heading1");
+			r.type("Two");
+			r.widget.saveEdit();
+			expect(r.text()).toBe("intro\n\n! Top\n\n* a\n* b\n\n! Two\n\n!! S\n\nx");
+			r.refresh();
+			before(r.idOf("intro"), "paragraph");
+			r.type("first");
+			r.widget.saveEdit();
+			expect(r.text()).toBe("first\n\nintro\n\n! Top\n\n* a\n* b\n\n! Two\n\n!! S\n\nx");
+		});
+
+		it("an empty tiddler: a hint, Enter writes a first paragraph, Shift-Enter offers the block types", function() {
+			var r = render("");
+			expect(r.widget.emptyHint).not.toBe(null);
+			expect(press(r, 13).prevented).toBe(true);
+			expect(r.widget.editor.where).toBe("end");
+			r.type("hello");
+			r.widget.saveEdit();
+			expect(r.text()).toBe("hello");
+			r.refresh();
+			expect(r.widget.emptyHint).toBe(null);
+			expect(r.widget.units[r.widget.selectedId].unit.kind).toBe("block");
+			// Only whitespace and a comment: Shift-Enter offers inserts only, the block goes after the comment
+			r.wiki.addTiddler(new $tw.Tiddler(r.wiki.getTiddler("T"), {text: "<!-- note -->\n\n"}));
+			r.refresh();
+			expect(r.widget.emptyHint).not.toBe(null);
+			press(r, 13, {shift: true});
+			expect(labels(r).every(function(l) { return l.indexOf("insert:") === 0; })).toBe(true);
+			choose(r, "insert", "heading1");
+			r.type("Title");
+			r.widget.saveEdit();
+			expect(r.text()).toBe("<!-- note -->\n\n! Title");
 		});
 
 		it("a new code block: Enter is a newline", function() {
