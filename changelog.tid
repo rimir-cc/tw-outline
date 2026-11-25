@@ -4,6 +4,7 @@ type: text/vnd.tiddlywiki
 ! Changelog
 
 |!Version |!Date |!Changes |
+|0.0.11 |2026-11-25 |Fix: the editor left out list markers and heading `!`s, but showed a code block's fence lines and the `>`s of a whole quote; it now shows only the content of those too (also `<<<` quotes), saving puts the markup back. |
 |0.0.10 |2026-11-25 |Copy, cut and paste (Ctrl-C / Ctrl-X / Ctrl-V in selection mode) through the system clipboard: a unit with its subtree pastes formatted into e-mail or Jira (HTML), as wikitext into text fields, and into an outline with its levels adapted to the place; plain text from elsewhere pastes as wikitext. Cut does not ask, Ctrl-Z undoes it; a copy flashes the unit. An empty new list item shows its marker and takes Tab / Shift-Tab as its level. |
 |0.0.9 |2026-11-23 |Fix: keys pressed right after the editor opened (Home, arrows) could be undone by the late caret-to-end move, so Enter then saved instead of splitting the item. |
 |0.0.8 |2026-11-23 |Block menu: //Insert before// (e.g. a heading above a list, a paragraph or a lower heading). Alt-Up/Down across heading lines: a heading moves up over the blocks above it (they join its section) and down over a higher heading; a paragraph or list moves into the next section and out of its own. An empty tiddler shows a hint: Enter writes a first paragraph, Shift-Enter offers the block types. Fix: a heading or paragraph could not be turned into a bullet next to a list. |

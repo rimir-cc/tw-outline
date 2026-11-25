@@ -49,6 +49,30 @@ describe("outline edit", function() {
 		expect(fmt.replace(text, m, idOf(m, "* a"), "* b").text).toContain("\n* b\n");
 	});
 
+	it("code blocks and <<< quotes: the editor leaves out their fence lines, they stay", function() {
+		var text = "```js\nvar a;\nvar b;\n```\n\n<<<.cls\nsaid\n<<< Someone\n\n```\n```", m = build(text),
+			code = idOf(m, "```js\nvar a;\nvar b;\n```"), q = idOf(m, "<<<.cls\nsaid\n<<< Someone");
+		expect(fmt.editSource(text, m, code)).toBe("var a;\nvar b;");
+		expect(fmt.editSource(text, m, q)).toBe("said");
+		expect(fmt.editSource(text, m, idOf(m, "```\n```"))).toBe("");
+		expect(fmt.replace(text, m, code, "x()").text).toBe("```js\nx()\n```\n\n<<<.cls\nsaid\n<<< Someone\n\n```\n```");
+		expect(fmt.replace(text, m, q, "one\ntwo").text).toBe("```js\nvar a;\nvar b;\n```\n\n<<<.cls\none\ntwo\n<<< Someone\n\n```\n```");
+		// CRLF text: the inserted line breaks follow it
+		var crlf = "```\r\na\r\n```", cm = build(crlf);
+		expect(fmt.editSource(crlf, cm, 0)).toBe("a");
+		expect(fmt.replace(crlf, cm, 0, "b\r\nc").text).toBe("```\r\nb\r\nc\r\n```");
+	});
+
+	it("a whole > quote: the editor shows its lines without their first >, saving puts it back", function() {
+		var text = "para\n\n> q1\n>> deeper\n>* item\n> q2\n\nend", m = build(text),
+			list = unit(m, function(u) { return u.kind === "list"; }).id;
+		expect(fmt.editSource(text, m, list)).toBe("q1\n> deeper\n* item\nq2");
+		expect(fmt.replace(text, m, list, "q1\n> deeper\n\nnew\n* item").text)
+			.toBe("para\n\n> q1\n>> deeper\n> new\n>* item\n\nend");
+		// Unchanged: the same source
+		expect(fmt.replace(text, m, list, fmt.editSource(text, m, list)).text).toBe(text);
+	});
+
 	it("line breaks in items and headings are stored as <br>, shown as line breaks", function() {
 		var text = "! H\n\n* a\n** a1\n* b\n\npara", m = build(text);
 		var r = fmt.replace(text, m, idOf(m, "* a"), "a\nsecond\r\nthird");

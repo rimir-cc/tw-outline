@@ -219,10 +219,51 @@ function toBreaks(source) {
 	return source.replace(/^(?:[ \t]*\r?\n)+|(?:\r?\n[ \t]*)+$/g, "").replace(/[ \t]*\r?\n/g, "<br>");
 }
 
-// Replace the unit's content (see contentStart) with newSource
+/*
+Fence lines of a code block (```lang ... ```) or a <<< quote block (<<<class ... <<< citation) that the editor
+leaves out: {open, content, close} (content lines joined by \n), or null for other units.
+*/
+function fenced(text, u) {
+	var fence = u.tag === "codeblock" ? /^```/ : (u.kind === "block" && u.tag === "blockquote" ? /^<<</ : null),
+		lines = fence ? text.substring(u.start, u.end).split(/\r?\n/) : [];
+	if(lines.length < 2 || !fence.test(lines[0]) || !fence.test(lines[lines.length - 1])) {
+		return null;
+	}
+	return {open: lines[0], content: lines.slice(1, -1).join("\n"), close: lines[lines.length - 1]};
+}
+
+// A whole quote of > lines: the editor shows its lines without their first ">"
+function isQuoteList(u) {
+	return u.kind === "list" && u.tag === "blockquote";
+}
+
+function unquote(source) {
+	return source.split(/\r?\n/).map(function(line) {
+		return line.replace(/^>[ \t]?/, "");
+	}).join("\n");
+}
+
+// Edited lines back into > lines: a ">" in front ("> " before text, ">" before a deeper marker); blank lines go
+function quote(source, nl) {
+	return source.split(/\r?\n/).filter(function(line) {
+		return /\S/.test(line);
+	}).map(function(line) {
+		return (outlineModel.MARKER_CHARS.indexOf(line.charAt(0)) !== -1 ? ">" : "> ") + line;
+	}).join(nl);
+}
+
+// Replace the unit's content (see contentStart, fenced, isQuoteList) with newSource
 exports.replace = function(text, model, id, newSource) {
 	var u = model.units[id];
 	if(!u) { return null; }
+	var nl = utils.eol(text),
+		f = fenced(text, u);
+	if(f) {
+		return {text: utils.splice(text, u.start, u.end, f.open + nl + newSource + nl + f.close), select: u.start};
+	}
+	if(isQuoteList(u)) {
+		return {text: utils.splice(text, u.start, u.end, quote(newSource, nl)), select: u.start};
+	}
 	newSource = stripTypedMarker(u, newSource);
 	if(isOneLine(u)) {
 		newSource = toBreaks(newSource);
@@ -343,10 +384,8 @@ function blockContent(text, u) {
 	if(u.tag === "p") {
 		return source;
 	}
-	if(u.tag === "codeblock") {
-		return source.replace(/^[^\n]*\n?/, "").replace(/\n?```[ \t]*$/, "");
-	}
-	return null;
+	var f = u.tag === "codeblock" ? fenced(text, u) : null;
+	return f ? f.content : null;
 }
 
 /*
@@ -713,10 +752,18 @@ exports.merge = function(text, model, id, content) {
 	};
 };
 
-// What the editor shows: the unit's content, without an item marker or heading prefix; <br> in items and headings as line breaks
+// What the editor shows: the unit's content, without an item marker or heading prefix, a code block's or <<< quote's
+// fence lines, a whole quote's ">"s; <br> in items and headings as line breaks
 exports.editSource = function(text, model, id) {
 	var u = model.units[id];
 	if(!u) { return ""; }
+	var f = fenced(text, u);
+	if(f) {
+		return f.content;
+	}
+	if(isQuoteList(u)) {
+		return unquote(text.substring(u.start, u.end));
+	}
 	var content = text.substring(contentStart(text, u), u.end);
 	return isOneLine(u) ? content.replace(/<br\s*\/?>/gi, "\n") : content;
 };

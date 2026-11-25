@@ -22,6 +22,9 @@ var ITEM_TAGS = {li: true, dt: true, dd: true, div: true};
 var HEADING_RE = /^h([1-6])$/;
 var MARKER_CHARS = "*#;:>";
 
+// List marker characters (an item's marker is a run of them)
+exports.MARKER_CHARS = MARKER_CHARS;
+
 function literal(node, name) {
 	var attr = node.attributes && node.attributes[name];
 	return attr && attr.type === "string" ? attr.value : null;

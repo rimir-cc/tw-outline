@@ -44,7 +44,7 @@ The tiddler is rendered unchanged. A JS widget, `$outline`, wraps the normal bod
 
 The editor is a real TW edit widget bound to a temp tiddler (`$:/temp/rimir/outline/...`), placed where the unit was. It lives outside the rendered body's widget tree, so a re-render of the body does not destroy it. Typing changes only the temp tiddler; the real tiddler changes once per save.
 
-The buffer holds the unit's content only: an item's marker and a heading's `!`s (plus the spaces after them) stay in the tiddler and are not part of the edit (`editSource`/`replace` in the adapter). `ui/editor` renders a compact textarea (no toolbar, SimpleEngine) or, with `$:/config/rimir/outline/full-editor` = `yes`, the full text editor with toolbar.
+The buffer holds the unit's content only: an item's marker and a heading's `!`s (plus the spaces after them), a code block's or `<<<` quote's fence lines, and the first `>` of each line of a whole quote stay in the tiddler and are not part of the edit (`editSource`/`replace` in the adapter). `ui/editor` renders a compact textarea (no toolbar, SimpleEngine) or, with `$:/config/rimir/outline/full-editor` = `yes`, the full text editor with toolbar.
 
 !! Block menu
 
