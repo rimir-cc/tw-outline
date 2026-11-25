@@ -29,7 +29,8 @@ Buffer: $:/temp/rimir/outline/edit/<title>, one per tiddler. Typing only changes
 written once on save. When the same tiddler is shown twice, the view that opened the editor owns the buffer
 (module registry `owners`): other views cannot open a second editor and never touch the buffer.
 The buffer also carries what is needed to reopen the edit: fields outline-orig-source, outline-orig-start,
-outline-orig-text, outline-is-new (yes/no) and outline-unit-kind (for a new unit: those of its anchor).
+outline-orig-text, outline-is-new (yes/no), outline-unit-kind (for a new unit: those of its anchor) and outline-depth
+(a new item's level relative to its anchor, see shiftNewItem).
 
 Kept edits: when the widget is destroyed (an ancestor re-rendered, the tiddler was closed) and the buffer differs
 from what the editor started with, the buffer is kept, not discarded. The next $outline widget of that tiddler
@@ -93,6 +94,8 @@ function editorState(unitKind, isNew, origSource, origStart, origText, blockType
 		// A new unit goes "after" its anchor (default), "before" it, or at the "end" of the text (no anchor)
 		where: isNew ? (where || "after") : "",
 		placement: isNew ? (where === "before" ? "before" : "after") : (unitKind === "item" ? "inside" : "before"),
+		// A new item after an item (Enter): levels deeper (Tab) or higher (Shift-Tab) than its anchor, while empty
+		depth: 0,
 		origSource: origSource,
 		origStart: origStart,
 		origText: origText,
@@ -210,6 +213,7 @@ methods.restoreEditor = function() {
 	ed.multiline = ed.isNew ? ed.blockType === "code" :
 		(ed.id === -1 ? /[\r\n]/.test(ed.origSource) : this.getAdapter().isMultiline(this.model, ed.id));
 	ed.caret = hint.caret || null;
+	ed.depth = parseInt(f["outline-depth"], 10) || 0;
 	this.placeEditor(!!hint.focused);
 	if(hint.focused) {
 		this.focusEditor();
@@ -292,7 +296,9 @@ methods.editorType = function() {
 	if(ed.blockType) {
 		return dom.newBlockType(ed.blockType);
 	}
-	return ed.kind === "item" ? anchorType || "bullet" : "paragraph";
+	var marker = ed.depth ? this.newItemMarker() : "",
+		markerType = {"*": "bullet", "#": "numbered"}[marker.charAt(marker.length - 1)];
+	return ed.kind === "item" ? markerType || anchorType || "bullet" : "paragraph";
 };
 
 methods.placeEditor = function(focus) {
@@ -321,6 +327,7 @@ methods.placeEditor = function(focus) {
 	host.addEventListener("focusin", function() { if(self.editor) { self.editor.focused = true; } }, false);
 	host.addEventListener("focusout", function(event) { self.noteBlur(event.target); }, false);
 	ed.host = host;
+	this.showNewItemDepth();
 	this.hideEdited();
 	// The host is in the document now: the FramedEngine needs that to create its iframe
 	// Inline: a block-mode parse would wrap the editor in a <p>, whose margin leaves a gap below it
@@ -490,7 +497,8 @@ methods.saveEdit = function(opts) {
 			return true;
 		}
 	} else if(ed.isNew) {
-		result = adapter.insertNew(current, target.model, target.id, newSource.replace(/\r?\n/g, utils.eol(current)));
+		result = adapter.insertNew(current, target.model, target.id, newSource.replace(/\r?\n/g, utils.eol(current)),
+			ed.depth && adapter.newItemMarker ? adapter.newItemMarker(target.model, target.id, ed.depth) : null);
 		if(!result) {
 			// Nothing left to insert (e.g. only the item marker was typed): like a blank new unit
 			this.closeEditor(true);
@@ -800,6 +808,55 @@ move the unit with its subtree, edit it again (at its new place) with the caret 
 consumed and nothing changes.
 */
 // One undo step for the save and the operation (outline-undo.js)
+/*
+The marker a new item after an item (Enter) is saved with, at its current depth (see newItemMarker of the adapter);
+"" for other editors or when the level does not fit (any more).
+*/
+methods.newItemMarker = function() {
+	var ed = this.editor,
+		adapter = this.getAdapter();
+	if(!ed || !ed.isNew || ed.blockType || ed.kind !== "item" || ed.unitKind !== "item" || ed.id === -1 || !adapter ||
+		!adapter.newItemMarker) {
+		return "";
+	}
+	return adapter.newItemMarker(this.model, ed.id, ed.depth) || "";
+};
+
+// Tab (1) / Shift-Tab (-1) on an empty new item: one level deeper / higher, within the range newItemMarker allows
+methods.shiftNewItem = function(dir) {
+	var ed = this.editor;
+	ed.depth += dir;
+	if(!this.newItemMarker()) {
+		ed.depth -= dir;
+		return;
+	}
+	var buffer = this.wiki.getTiddler(this.bufferTitle());
+	if(buffer) {
+		this.wiki.addTiddler(new $tw.Tiddler(buffer, {"outline-depth": String(ed.depth)}));
+	}
+	this.showNewItemDepth();
+};
+
+/*
+Show a new item's depth: the field moves by one list indentation per level, and gets the marker type of its level
+(a bullet under a numbered item, ...)
+*/
+methods.showNewItemDepth = function() {
+	var ed = this.editor,
+		host = ed && ed.host;
+	if(!host || !host.style || !ed.isNew || ed.kind !== "item") {
+		return;
+	}
+	var view = this.document.defaultView,
+		list = host.parentNode,
+		step = view && view.getComputedStyle && list ? parseFloat(view.getComputedStyle(list).paddingLeft) || 0 : 0;
+	host.style.marginLeft = ed.depth && step ? (ed.depth * step) + "px" : "";
+	var type = this.editorType();
+	if(type) {
+		host.setAttribute("data-ol-type", type);
+	}
+};
+
 methods.editOperate = function(name, arg) {
 	var args = arguments;
 	return this.undoGroup(function() { return editOperateSteps.apply(this, args); });
@@ -810,8 +867,12 @@ function editOperateSteps(name, arg) {
 	if(!ed) {
 		return false;
 	}
-	// Empty text: a new unit has nothing to indent yet, an existing one would be deleted by the save
+	// Empty text: an existing unit would be deleted by the save, a new one has nothing to write yet. A new item
+	// takes Tab / Shift-Tab as the level it is saved with
 	if(!/\S/.test(this.wiki.getTiddlerText(this.bufferTitle(), ""))) {
+		if(name === "indent" || name === "promote") {
+			this.shiftNewItem(name === "indent" ? 1 : -1);
+		}
 		return true;
 	}
 	var caret = this.editorCaret();

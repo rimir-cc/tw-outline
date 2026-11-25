@@ -29,6 +29,7 @@ var Widget = require("$:/core/modules/widgets/widget.js").widget,
 	editor = require("$:/plugins/rimir/outline/outline-editor.js"),
 	menu = require("$:/plugins/rimir/outline/outline-menu.js"),
 	undo = require("$:/plugins/rimir/outline/outline-undo.js"),
+	clipboard = require("$:/plugins/rimir/outline/outline-clipboard.js"),
 	dom = require("$:/plugins/rimir/outline/dom-utils.js");
 
 var MARKER_TIDDLER = "$:/plugins/rimir/outline/ui/transclusion-marker",
@@ -52,6 +53,8 @@ editor.install(OutlineWidget.prototype);
 // Block menu (Shift-Enter): openMenu, closeMenu, handleMenuKeydown
 menu.install(OutlineWidget.prototype);
 undo.install(OutlineWidget.prototype);
+// System clipboard (copy, cut, paste events): handleCopy, handleCut, handlePaste
+clipboard.install(OutlineWidget.prototype);
 
 OutlineWidget.prototype.render = function(parent, nextSibling) {
 	this.parentDomNode = parent;
@@ -64,6 +67,9 @@ OutlineWidget.prototype.render = function(parent, nextSibling) {
 	domNode.addEventListener("keydown", function(event) { self.handleKeydown(event); }, false);
 	domNode.addEventListener("click", function(event) { self.handleClick(event); }, false);
 	domNode.addEventListener("dblclick", function(event) { self.handleDblClick(event); }, false);
+	domNode.addEventListener("copy", function(event) { self.handleCopy(event); }, false);
+	domNode.addEventListener("cut", function(event) { self.handleCut(event); }, false);
+	domNode.addEventListener("paste", function(event) { self.handlePaste(event); }, false);
 	// The block menu closes when the focus leaves the outline
 	domNode.addEventListener("focusout", function(event) {
 		if(!event.relatedTarget || !domNode.contains(event.relatedTarget)) {

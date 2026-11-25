@@ -31,7 +31,7 @@ type: text/vnd.tiddlywiki
 |`outline-save` |ctrl-Enter |Save the edit |
 |`outline-continue` |Enter |Save and open a new unit (single-line units). In the middle of a list item's text: split it (see Split) |
 |`outline-newline` |shift-Enter |Newline in the editor (saved as `<br>` in list items and headings) |
-|`outline-indent` / `outline-promote` |Tab / shift-Tab |In the editor too: save, indent / promote, keep editing |
+|`outline-indent` / `outline-promote` |Tab / shift-Tab |In the editor too: save, indent / promote, keep editing. On an empty new list item: its level (see New unit) |
 |`outline-move-up` / `outline-move-down` |alt-Up / alt-Down |In the editor too: save, move, keep editing |
 |`outline-edit-up` |ctrl-Up |Editor only: save and edit the previous unit |
 |`outline-edit-down` |ctrl-Down |Editor only: save and edit the next unit |
@@ -40,6 +40,8 @@ type: text/vnd.tiddlywiki
 |`outline-help` |shift-slash |Show / hide the key overview. `?` always works too, whatever the keyboard layout; Escape closes it |
 
 All are `$:/config/shortcuts/<name>`; descriptions are in `$:/config/ShortcutInfo/<name>`. Change them in the settings tab (the core shortcut editor, press the key to record it, platform variants included) or in ControlPanel > Keyboard Shortcuts.
+
+Copy, cut and paste (Ctrl-C / Ctrl-X / Ctrl-V, Cmd on Mac) are the browser's own keys, not shortcut tiddlers (see Clipboard).
 
 !! Type badges
 
@@ -100,6 +102,28 @@ In selection mode Ctrl-Z takes back the last change made in the outline: a move,
 
 The history is kept per tiddler in `$:/temp/rimir/outline/undo/<title>` for the running session only, the last `$:/config/rimir/outline/undo-depth` steps (default 20). A new change empties the redo steps. Undo writes only while the tiddler still has the text the outline left: when it was changed elsewhere (another editor, a sync), the history is dropped and nothing is written. Read-only wikis: nothing.
 
+!! Clipboard
+
+In selection mode Ctrl-C copies the selected unit with its subtree (an item with its sub-items, a heading with its section, a whole list, a container with its contents) to the system clipboard, Ctrl-X cuts it: the same, then it is deleted without the Delete menu (Ctrl-Z brings it back). Ctrl-V pastes after the selected unit and selects what it pasted; in a tiddler without units it goes at the end. These are the browser's own copy, cut and paste (Cmd on Mac, the Edit menu works too), so the keys cannot be changed in the shortcut settings. A copied unit flashes briefly. In the editor, and while text is marked with the mouse, they act on text as usual; read-only wikis: copy only.
+
+A copy puts three formats on the clipboard:
+
+|!Format |!Content |!Used by |
+|`text/html` |the unit rendered (its wikitext source rendered in this tiddler's context), without CSS classes; links to tiddlers become their text |e-mail, Jira and other rich text editors |
+|`text/plain` |the wikitext source |text fields, a TiddlyWiki editor |
+|`application/x-rimir-outline` |JSON `{kind, source}` (kind `items`, `heading` or `block`) |a paste into an outline, also in another tab or wiki |
+
+In the HTML and the plain text, copied list items start at level 1 (a sub-item copied alone has no empty bullets above it); the outline format keeps the source as it is. A paste takes the outline format when it is there, else the plain text as wikitext: one list is pasted as items, one heading with its section as a heading, anything else as it is. HTML from elsewhere is not converted, only its plain text is used.
+
+The levels adapt to the place (only real list markers and heading `!`s change, not lines inside a code block):
+
+|!Copied \ selected |!List item |!Whole list |!Heading |!Other block |
+|Items |after the item's sub-items, at its level; sub-items keep their extra marker characters (`* a`, `** a1` after `## y` → `## a`, `##* a1`) |at the end of the list, at its top level |a new list right below the heading line |a new list after the block |
+|Heading |after the outermost list |after the list |after the heading's section, at its level |after the block |
+|Block |after the outermost list |after the list |right below the heading line |after the block |
+
+A new list starts at level 1 (`#* a`, `#** b` → `* a`, `** b`). A heading after anything but a heading gets one level below the heading of the section it lands in (level 1 outside any section); its sub-headings keep their distance, at most level 6. Blocks are set apart by blank lines.
+
 !! Merge (Backspace)
 
 In the editor, caret at the very start of a list item (nothing selected): the item's text goes to the end of the item above it in the list (the previous item in document order: the parent, or the last sub-item of the previous sibling), the item's line goes, its sub-items keep their lines and levels. The editor continues in the item above, at the join. An empty item is simply deleted (also one with sub-items) and the editor goes to the end of the item above; an empty new item is discarded the same way. The first item of a list, other units and multi-line items: a normal Backspace.
@@ -114,7 +138,7 @@ A tiddler without units (empty, or only whitespace and comments) shows a hint. E
 
 !! New unit (Enter)
 
-* List item: same marker, after the item's whole subtree.
+* List item: same marker, after the item's whole subtree. While it is still empty, Tab / Shift-Tab set its level (one marker character more / less; at most one level below the item above it, at least level 1); the field moves with it and it is written with that marker.
 * Heading: paragraph directly under the heading line.
 * Paragraph: paragraph after it.
 
@@ -134,7 +158,7 @@ Insert before offers the same types as Insert after and puts the block directly 
 
 |!Tiddler |!Purpose |
 |`$:/state/rimir/outline/on/<title>` |Outline mode on (`yes`) / off |
-|`$:/temp/rimir/outline/...` |Editor buffer, selection, open key overview (`help/<title>`) and undo history (`undo/<title>`, JSON) while active |
+|`$:/temp/rimir/outline/...` |Editor buffer, selection, open key overview (`help/<title>`), undo history (`undo/<title>`, JSON) while active |
 |`$:/config/rimir/outline/badges` |Type badges: `all` (default), `headings` (h1–h6 only) or `off`. Sets class `rr-ol-badges-<mode>` on the frame; the badge text is the unit's `data-ol-type` |
 |`$:/config/rimir/outline/quick-delete-items` |`yes` (default): Delete removes list items without sub-items without asking; `no`: always ask |
 |`$:/config/rimir/outline/undo-depth` |Number of undo steps kept per tiddler (default 20) |

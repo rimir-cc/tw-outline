@@ -109,8 +109,39 @@ tags: $:/tags/Stylesheet
 	overflow: hidden;
 }
 
+/* A new list item outside a list (block menu after a paragraph, heading, ...) shows its marker like one in a list.
+   Its marker type, and that of a new item whose level (Tab / Shift-Tab while empty) has another type than its list */
+div.rr-ol-editor-host[data-ol-type="bullet"],
+div.rr-ol-editor-host[data-ol-type="numbered"] {
+	display: list-item;
+	margin-left: 40px;
+}
+
+div.rr-ol-editor-host[data-ol-type="bullet"],
+ol > li.rr-ol-editor-host[data-ol-type="bullet"] {
+	list-style-type: disc;
+}
+
+div.rr-ol-editor-host[data-ol-type="numbered"],
+ul > li.rr-ol-editor-host[data-ol-type="numbered"] {
+	list-style-type: decimal;
+}
+
 .rr-ol-editor-host .tc-editor-toolbar {
 	margin-bottom: 0.2em;
+}
+
+/* Copy feedback: a short highlight of the copied unit, also on everything inside it, so that no element with its own
+   background covers it (a code block's pre, highlighted code, a plugin's wrapper around code blocks, table cells) */
+.rr-ol-copied,
+.rr-ol-copied * {
+	animation: rr-ol-copied 0.6s ease-out;
+}
+
+@keyframes rr-ol-copied {
+	from {
+		background-color: <<colour primary>>;
+	}
 }
 
 /* Hint in a tiddler without units (Enter / Shift-Enter start the first block) */

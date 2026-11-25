@@ -162,6 +162,22 @@ describe("outline edit", function() {
 		// Only the marker: nothing to insert
 		expect(fmt.insertNew(text, m, idOf(m, "* a"), "*  ")).toBeNull();
 	});
+	it("new item at another level: newItemMarker range and the marker passed to insertNew", function() {
+		var text = "* a\n** a1\n*** a2\n* b\n#* c", m = build(text), a = idOf(m, "* a");
+		// Deeper: down to one below the last item of a's subtree (a2); higher: down to level 1
+		expect(fmt.newItemMarker(m, a, 0)).toBe("*");
+		expect(fmt.newItemMarker(m, a, 3)).toBe("****");
+		expect(fmt.newItemMarker(m, a, 4)).toBeNull();
+		expect(fmt.newItemMarker(m, a, -1)).toBeNull();
+		expect(fmt.newItemMarker(m, idOf(m, "*** a2"), -2)).toBe("*");
+		// One more of the last marker character, one character less
+		expect(fmt.newItemMarker(m, idOf(m, "#* c"), 1)).toBe("#**");
+		expect(fmt.newItemMarker(m, idOf(m, "#* c"), -1)).toBe("#");
+		// Not an item
+		expect(fmt.newItemMarker(build("para"), 0, 0)).toBeNull();
+		expect(fmt.insertNew(text, m, a, "x", "**").text).toBe("* a\n** a1\n*** a2\n** x\n* b\n#* c");
+	});
+
 	it("new item keeps CRLF", function() {
 		var text = "* a\r\n** a1\r\n* b", m = build(text),
 			r = fmt.insertNew(text, m, idOf(m, "* a"), "x");

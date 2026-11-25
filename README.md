@@ -13,6 +13,7 @@ Work on an ordinary tiddler like on a Streams outline: select a block, edit it i
 - **Indent** - Tab/Shift-Tab demote/promote list items and headings with their subtrees.
 - **In-place editor** - Enter or a double-click opens TW's own edit widget at the unit: a compact one-line field by default, optionally the full editor with toolbar. Lists and headings are edited without their marker; nesting stays with Tab/Shift-Tab. Ctrl-Enter saves, Enter saves and starts a new unit, Escape discards, Ctrl-Up/Down save and move the editor to the previous/next unit.
 - **Delete** - the Delete key removes the selection with everything below it, after a small yes/no menu (a heading: with its section or just the heading); list items without sub-items go at once (a setting).
+- **Copy, cut, paste** - Ctrl-C, Ctrl-X, Ctrl-V move a unit with its subtree, also to another tiddler; through the system clipboard: formatted into e-mail or Jira, as wikitext into text fields; pasted into an outline a unit takes the level of the place.
 - **Undo** - Ctrl-Z takes back the last changes made in the outline (deletes, moves, merges, splits, edits), Ctrl-Y redoes them; for the running session.
 - **Split and merge** - Enter in the middle of a list item splits it at the caret; Backspace at the start of an item joins it to the item above (an empty item is deleted), like in Streams.
 - **Block menu** - Shift-Enter: insert a new paragraph, heading, list, quote or code block after or before the selection (in an empty tiddler: the first block), or turn the selection into another type.

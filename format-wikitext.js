@@ -3,7 +3,7 @@ title: $:/plugins/rimir/outline/format-wikitext.js
 type: application/javascript
 module-type: outline-format
 
-Wikitext adapter: indent, promote, move, replace, insertNew, remove, deleteUnit, merge, split. Functions take (text, model, id) and return null or {text, select}.
+Wikitext adapter: indent, promote, move, replace, insertNew, remove, deleteUnit, merge, split, copy, paste. Functions take (text, model, id) and return null or {text, select}.
 
 \*/
 "use strict";
@@ -234,19 +234,36 @@ exports.replace = function(text, model, id, newSource) {
 Insert a new sibling unit (item) or first block (heading/block); null for blank source. A new item's text that
 starts with the item's own marker and a space (typed out of habit) loses that marker: it is added anyway.
 */
-exports.insertNew = function(text, model, id, newSource) {
+exports.insertNew = function(text, model, id, newSource, marker) {
 	var u = model.units[id];
 	newSource = u ? stripTypedMarker(u, newSource) : newSource;
 	if(!u || !newSource || !newSource.trim()) { return null; }
 	var nl = utils.eol(text), pos, insert, select;
 	if(u.kind === "item") {
 		pos = u.subtreeEnd;
-		insert = nl + u.marker + " " + toBreaks(newSource);
+		insert = nl + (marker || u.marker) + " " + toBreaks(newSource);
 		select = pos + nl.length;
 	} else {
 		return insertBlockAt(text, u.end, newSource);
 	}
 	return {text: utils.splice(text, pos, pos, insert), select: select};
+};
+
+/*
+Marker of a new item after item `id` (insertNew), `delta` levels deeper (Tab) or higher (negative, Shift-Tab) than
+the item: one more of the item's last marker character per level deeper, one character less per level higher. Null
+when out of range: above depth 1, or more than one level below the last item of the item's subtree (the new item
+would have no parent).
+*/
+exports.newItemMarker = function(model, id, delta) {
+	var u = model.units[id];
+	if(!u || u.kind !== "item") { return null; }
+	var items = subtreeUnits(model, u, "item"),
+		last = items[items.length - 1];
+	var length = u.marker.length + delta;
+	if(length < 1 || length > last.marker.length + 1) { return null; }
+	return delta > 0 ? u.marker + u.marker.charAt(u.marker.length - 1).repeat(delta) :
+		u.marker.substring(0, length);
 };
 
 // Insert block `source` at `pos` (end of a unit), set apart by a blank line before and, when content follows, after
@@ -523,6 +540,110 @@ exports.deleteUnit = function(text, model, id, mode) {
 	u = deleteTarget(model, id);
 	result = cut(text, model, u, u.subtreeEnd);
 	result.removed = subtreeIds(model, u);
+	return result;
+};
+
+/*
+Clipboard (outline-clipboard.js). copy: the source of unit `id` with its subtree, as Delete takes it, and its clip kind:
+"items" (an item with its sub-items, a whole list), "heading" (with its section) or "block" (anything else).
+*/
+exports.copy = function(text, model, id) {
+	var u = model.units[id];
+	if(!u) { return null; }
+	return {
+		kind: u.kind === "item" || u.kind === "list" ? "items" : (u.kind === "heading" ? "heading" : "block"),
+		source: text.substring(u.start, u.subtreeEnd)
+	};
+};
+
+/*
+Clip kind of a source from outside (plain text on the clipboard), by its model `cm`: "items" when it is one list,
+"heading" when it is one heading (with its section), else "block" (pasted as it is).
+*/
+exports.clipKind = function(cm) {
+	var root = cm.roots.length === 1 ? cm.units[cm.roots[0]] : null;
+	return root && root.kind === "list" ? "items" : (root && root.kind === "heading" ? "heading" : "block");
+};
+
+// The list an item belongs to at the top (a list unit: itself), any other unit itself
+function outermostList(model, u) {
+	while(u.parent !== -1 && (u.kind === "item" || u.kind === "list") &&
+		(model.units[u.parent].kind === "item" || model.units[u.parent].kind === "list")) {
+		u = model.units[u.parent];
+	}
+	return u;
+}
+
+// Level of the heading whose section unit `u` is in, 0 outside any section
+function sectionLevel(model, u) {
+	var p = u.parent;
+	while(p !== -1 && model.units[p].kind !== "heading") {
+		p = model.units[p].parent;
+	}
+	return p === -1 ? 0 : model.units[p].level;
+}
+
+/*
+Clip source with its levels adapted, by its model `cm`. Items: the top items get marker `top`, deeper ones `top` plus
+their own characters beyond the top marker. Heading: the first heading gets level `top`, the others keep their
+distance to it, at most 6. Blocks stay. Only units of the model are rewritten, not marker-like lines in a code block.
+*/
+function relevel(cm, kind, top) {
+	var edits = [];
+	if(kind === "items") {
+		var items = cm.units.filter(function(x) { return x.kind === "item"; }),
+			base = items[0].marker;
+		items.forEach(function(x) {
+			edits.push({pos: x.start, remove: x.marker.length, insert: top + x.marker.substring(base.length)});
+		});
+	} else if(kind === "heading") {
+		var headings = cm.units.filter(function(x) { return x.kind === "heading"; }),
+			first = headings[0].level;
+		headings.forEach(function(x) {
+			edits.push({pos: x.start, remove: x.level, insert: "!".repeat(Math.max(1, Math.min(6, top + x.level - first)))});
+		});
+	}
+	return apply(cm.text, edits);
+}
+
+/*
+Paste `clip` ({kind, source} of copy; `cm`: the outline model of its source) after unit `id`, -1: at the end of the
+text (a tiddler without units). Levels adapt to the place:
+- items after an item: siblings after its subtree, at its marker; after a whole list: at its end, at its top level;
+  elsewhere a new list at level 1
+- a heading after a heading: after its section, at its level; elsewhere one level below the heading of the section
+  it lands in (level 1 outside any section)
+- under a selected heading, other clips go right below its line; a selected item anchors them at its outermost list
+Returns {text, select, kind} (select: the first pasted unit, kind: its kind) or null.
+*/
+exports.paste = function(text, model, id, clip, cm) {
+	var u = id === -1 ? null : model.units[id];
+	if(!clip || !cm || !cm.units.length || (id !== -1 && !u)) { return null; }
+	var kind = clip.kind,
+		items = cm.units.filter(function(x) { return x.kind === "item"; }),
+		headings = cm.units.filter(function(x) { return x.kind === "heading"; });
+	if(kind === "items" && !items.length || kind === "heading" && !headings.length) { return null; }
+	var nl = utils.eol(text),
+		newList = kind === "items" ? items[0].marker.charAt(items[0].marker.length - 1) : "",
+		result;
+	function adapted(top) {
+		return relevel(cm, kind, top).replace(/\r?\n/g, nl);
+	}
+	if(!u) {
+		var head = text.replace(/\s+$/, ""),
+			prefix = /\S/.test(head) ? head + nl + nl : "";
+		result = {text: prefix + adapted(kind === "items" ? newList : 1), select: prefix.length};
+	} else if(kind === "items" && (u.kind === "item" || u.kind === "list")) {
+		var top = u.kind === "item" ? u.marker : model.units[u.children[0]].marker;
+		result = {text: utils.splice(text, u.subtreeEnd, u.subtreeEnd, nl + adapted(top)), select: u.subtreeEnd + nl.length};
+	} else if(u.kind === "heading") {
+		result = kind === "heading" ? insertBlockAt(text, u.subtreeEnd, adapted(u.level)) :
+			insertBlockAt(text, u.end, adapted(newList));
+	} else {
+		var anchor = outermostList(model, u);
+		result = insertBlockAt(text, anchor.subtreeEnd, adapted(kind === "items" ? newList : sectionLevel(model, anchor) + 1));
+	}
+	result.kind = kind === "items" ? "item" : (kind === "heading" ? "heading" : cm.units[cm.roots[0]].kind);
 	return result;
 };
 
