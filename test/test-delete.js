@@ -137,6 +137,18 @@ describe("outline delete and merge", function() {
 		expect(fmt.mergeTarget(m, 0)).toBe(-1);
 	});
 
+	it("mergeSource: the item below that merges into an item (Delete at its end)", function() {
+		var t = "* a\n* b\n** b1\n* c\n\npara\n\n* d", m = build(t);
+		expect(fmt.mergeSource(m, idOf(m, "* a"))).toBe(idOf(m, "* b"));
+		// An item with sub-items: its first sub-item
+		expect(fmt.mergeSource(m, idOf(m, "* b"))).toBe(idOf(m, "** b1"));
+		expect(fmt.mergeSource(m, idOf(m, "** b1"))).toBe(idOf(m, "* c"));
+		// The last item of a list: the next list is another one
+		expect(fmt.mergeSource(m, idOf(m, "* c"))).toBe(-1);
+		expect(fmt.mergeSource(m, idOf(m, "* d"))).toBe(-1);
+		expect(fmt.mergeSource(m, idOf(m, "para"))).toBe(-1);
+	});
+
 	it("splits an item: the rest goes to a new item right below", function() {
 		function split(text, s, rest) {
 			var m = build(text), id = idOf(m, s), r = fmt.split(text, m, id, rest);

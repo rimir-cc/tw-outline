@@ -209,6 +209,21 @@ describe("outline edit", function() {
 		expect(r.text.replace(/\r\n/g, "")).not.toMatch(/[\r\n]/);
 	});
 
+	it("new unit before: an item with the item's marker, a paragraph before anything else", function() {
+		var t = "* a\n* b\n** b1", m = build(t);
+		expect(fmt.insertNew(t, m, idOf(m, "* b"), "x", null, "before")).toEqual({text: "* a\n* x\n* b\n** b1", select: 4});
+		expect(fmt.insertNew(t, m, idOf(m, "** b1"), "** y", null, "before").text).toBe("* a\n* b\n** y\n** b1");
+		t = "para\n\nnext";
+		m = build(t);
+		expect(fmt.insertNew(t, m, idOf(m, "next"), "x", null, "before")).toEqual({text: "para\n\nx\n\nnext", select: 6});
+		expect(fmt.insertNew(t, m, idOf(m, "para"), "x", null, "before").text).toBe("x\n\npara\n\nnext");
+		expect(fmt.insertNew(t, m, idOf(m, "para"), "  ", null, "before")).toBe(null);
+		// CRLF
+		t = "* a\r\n* b";
+		m = build(t);
+		expect(fmt.insertNew(t, m, idOf(m, "* b"), "x", null, "before").text).toBe("* a\r\n* x\r\n* b");
+	});
+
 	it("heading new paragraph", function() {
 		var text = "! H\n\ntext", m = build(text),
 			r = fmt.insertNew(text, m, idOf(m, "! H"), "x");

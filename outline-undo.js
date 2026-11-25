@@ -104,6 +104,15 @@ methods.undoGroup = function(fn) {
 	}
 };
 
+// True when undo (back = true) or redo has a step that fits the tiddler's current text
+methods.undoAvailable = function(back) {
+	var tiddler = this.wiki.getTiddler(this.tiddlerTitle),
+		state = this.readUndo(),
+		from = back ? state.undo : state.redo,
+		entry = from[from.length - 1];
+	return !!tiddler && !!entry && (tiddler.fields.text || "") === (back ? entry.after : entry.before);
+};
+
 /*
 Undo (back = true) or redo the last step. Always consumes the key. Nothing happens in read-only wikis, while this view
 has an open editor, or when there is no step.

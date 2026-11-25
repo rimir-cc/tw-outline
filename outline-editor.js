@@ -29,7 +29,7 @@ Buffer: $:/temp/rimir/outline/edit/<title>, one per tiddler. Typing only changes
 written once on save. When the same tiddler is shown twice, the view that opened the editor owns the buffer
 (module registry `owners`): other views cannot open a second editor and never touch the buffer.
 The buffer also carries what is needed to reopen the edit: fields outline-orig-source, outline-orig-start,
-outline-orig-text, outline-is-new (yes/no), outline-unit-kind (for a new unit: those of its anchor) and outline-depth
+outline-orig-text, outline-orig-edit (the text the editor opened with), outline-is-new (yes/no), outline-unit-kind (for a new unit: those of its anchor) and outline-depth
 (a new item's level relative to its anchor, see shiftNewItem).
 
 Kept edits: when the widget is destroyed (an ancestor re-rendered, the tiddler was closed) and the buffer differs
@@ -87,7 +87,7 @@ function editorState(unitKind, isNew, origSource, origStart, origText, blockType
 		widget: null,
 		id: -1,
 		isNew: isNew,
-		// A new unit of a chosen block type (Shift-Enter menu): paragraph, heading1, bulleted, code, ...
+		// A new unit of a chosen block type (block menu): paragraph, heading1, bulleted, code, ...
 		blockType: typeKind ? blockType : "",
 		kind: typeKind || (isNew ? (unitKind === "item" ? "item" : "block") : unitKind),
 		unitKind: unitKind,
@@ -167,10 +167,12 @@ methods.startEdit = function(id, opts) {
 	ed.multiline = isNew ? ed.blockType === "code" : adapter.isMultiline(this.model, id);
 	this.editor = ed;
 	ownersOf(this.wiki)[this.bufferTitle()] = this;
+	var initial = isNew ? "" : adapter.editSource(this.model.text, this.model, id);
 	this.wiki.addTiddler(new $tw.Tiddler({
 		title: this.bufferTitle(),
-		text: isNew ? "" : adapter.editSource(this.model.text, this.model, id),
+		text: initial,
 		type: "text/vnd.tiddlywiki",
+		"outline-orig-edit": initial,
 		"outline-orig-source": ed.origSource,
 		"outline-orig-start": String(ed.origStart),
 		"outline-orig-text": ed.origText,
@@ -221,14 +223,15 @@ methods.restoreEditor = function() {
 	return true;
 };
 
-// True when the buffer differs from what the editor started with (new unit: anything typed)
+// True when the buffer differs from the text the editor opened with (new unit: anything typed)
 methods.editChanged = function() {
 	var ed = this.editor,
-		text = this.wiki.getTiddlerText(this.bufferTitle());
+		buffer = this.wiki.getTiddler(this.bufferTitle()),
+		text = buffer ? buffer.fields.text || "" : undefined;
 	if(!ed || text === undefined) {
 		return false;
 	}
-	return ed.isNew ? /\S/.test(text) : text !== ed.origSource;
+	return ed.isNew ? /\S/.test(text) : text !== buffer.fields["outline-orig-edit"];
 };
 
 /*
@@ -304,7 +307,7 @@ methods.editorType = function() {
 methods.placeEditor = function(focus) {
 	var ed = this.editor,
 		nodes = ed.id === -1 ? [] : this.editAnchorNodes(),
-		host = this.document.createElement(ed.placement === "after" && ed.unitKind === "item" && nodes.length ? "li" : "div"),
+		host = this.document.createElement(ed.isNew && ed.unitKind === "item" && nodes.length ? "li" : "div"),
 		self = this;
 	host.className = HOST_CLASS;
 	var type = this.editorType();
@@ -498,7 +501,7 @@ methods.saveEdit = function(opts) {
 		}
 	} else if(ed.isNew) {
 		result = adapter.insertNew(current, target.model, target.id, newSource.replace(/\r?\n/g, utils.eol(current)),
-			ed.depth && adapter.newItemMarker ? adapter.newItemMarker(target.model, target.id, ed.depth) : null);
+			ed.depth && adapter.newItemMarker ? adapter.newItemMarker(target.model, target.id, ed.depth) : null, ed.where);
 		if(!result) {
 			// Nothing left to insert (e.g. only the item marker was typed): like a blank new unit
 			this.closeEditor(true);
@@ -744,13 +747,21 @@ methods.handleEditorKeydown = function(event) {
 	if(this.keyMatches(event, "outline-save")) {
 		this.saveEdit();
 	} else if(!ed.multiline && this.keyMatches(event, "outline-continue")) {
-		if(!this.editSplit()) {
+		if(!this.editInsertBefore() && !this.editSplit()) {
 			this.saveEdit({"continue": true});
 		}
 	} else if(!ed.multiline && this.keyMatches(event, "outline-newline")) {
 		this.insertNewline();
 	} else if(this.keyMatches(event, "outline-merge") && this.editMerge()) {
 		// consumed
+	} else if(this.keyMatches(event, "outline-merge-next") && this.editMergeNext()) {
+		// consumed
+	} else if(this.keyMatches(event, "outline-undo") && this.editUndo(true)) {
+		// consumed
+	} else if(this.keyMatches(event, "outline-redo") && this.editUndo(false)) {
+		// consumed
+	} else if(this.keyMatches(event, "outline-menu")) {
+		this.editMenu();
 	} else if(this.keyMatches(event, "outline-cancel")) {
 		this.cancelEdit();
 	} else if(this.keyMatches(event, "outline-move-up")) {
@@ -783,8 +794,9 @@ methods.editStep = function(dir) {
 	if(!ed) {
 		return false;
 	}
+	// A new unit before its anchor has the anchor below it
 	var blank = !/\S/.test(this.wiki.getTiddlerText(this.bufferTitle(), "")),
-		stay = blank && (ed.isNew ? dir < 0 : dir > 0);
+		stay = blank && (ed.isNew && ed.where !== "before" ? dir < 0 : dir > 0);
 	// Step from the edited unit (a new unit: from its anchor), whatever was selected before
 	if(ed.id !== -1 && this.selectedId !== ed.id) {
 		this.select(ed.id);
@@ -810,12 +822,12 @@ consumed and nothing changes.
 // One undo step for the save and the operation (outline-undo.js)
 /*
 The marker a new item after an item (Enter) is saved with, at its current depth (see newItemMarker of the adapter);
-"" for other editors or when the level does not fit (any more).
+"" for other editors (also a new item before its anchor) or when the level does not fit (any more).
 */
 methods.newItemMarker = function() {
 	var ed = this.editor,
 		adapter = this.getAdapter();
-	if(!ed || !ed.isNew || ed.blockType || ed.kind !== "item" || ed.unitKind !== "item" || ed.id === -1 || !adapter ||
+	if(!ed || !ed.isNew || ed.where !== "after" || ed.blockType || ed.kind !== "item" || ed.unitKind !== "item" || ed.id === -1 || !adapter ||
 		!adapter.newItemMarker) {
 		return "";
 	}
@@ -883,11 +895,55 @@ function editOperateSteps(name, arg) {
 		return true;
 	}
 	this.operate(name, arg);
+	this.editAgain(caret);
+	return true;
+};
+
+// Edit the selected unit again (after a save and an operation on it), the caret at `caret` if given
+methods.editAgain = function(caret) {
 	// The write may not be rendered yet: remap so the unit is edited at its new position
 	this.ensureCurrent();
-	if(this.editSelected() && caret) {
+	if(this.editSelected() && this.editor && caret) {
 		this.editor.caret = caret;
 		this.focusEditor();
+	}
+};
+
+/*
+Alt-Enter in the editor: save, then the block menu with the "Turn into" entries of the unit (outline-menu.js). The
+editor opens again on the unit, converted or not (Escape), the caret where it was. Blank text: nothing happens.
+*/
+methods.editMenu = function() {
+	var ed = this.editor;
+	if(!ed || !/\S/.test(this.wiki.getTiddlerText(this.bufferTitle(), ""))) {
+		return;
+	}
+	var caret = this.editorCaret();
+	if(ed.id !== -1 && this.selectedId !== ed.id) {
+		this.select(ed.id);
+	}
+	if(!this.saveEdit() || !this.ensureCurrent()) {
+		return;
+	}
+	if(!this.openMenu({convertOnly: true, caret: caret})) {
+		this.editAgain(caret);
+	}
+};
+
+/*
+Ctrl-Z / Ctrl-Y in the editor while its text is as it opened (nothing typed, or the typing undone): the outline's undo
+or redo (outline-undo.js), so a split, merge, move or save made from the editor is taken back; the editor then opens
+on the unit selected after it. With typed text, or without a step, the key is the text field's own.
+*/
+methods.editUndo = function(back) {
+	if(!this.editor || this.editChanged() || this.isReadOnly() || !this.undoAvailable(back)) {
+		return false;
+	}
+	this.closeEditor(true);
+	dom.focus(this.domNode);
+	this.undoStep(back);
+	if(this.ensureCurrent()) {
+		this.editSelected();
 	}
 	return true;
 };
@@ -918,12 +974,17 @@ function editMergeSteps() {
 		if(!blank) {
 			return false;
 		}
-		// The item above the empty new one: the last item of the anchor's subtree
+		// The item above the empty new one: the last item of the anchor's subtree (before the anchor: the item above
+		// the anchor; none: the anchor itself, at its start)
 		var anchor = this.units[ed.id].unit,
-			above = adapter.itemBefore(this.model, ed.id, anchor.subtreeEnd);
+			before = ed.where === "before",
+			above = adapter.itemBefore(this.model, ed.id, before ? anchor.start : anchor.subtreeEnd);
 		this.cancelEdit();
 		if(above !== -1 && this.select(above) && this.editSelected()) {
 			this.editAtEnd();
+		} else if(above === -1 && before && this.editSelected() && this.editor) {
+			this.editor.caret = [0, 0];
+			this.focusEditor();
 		}
 		return true;
 	}
@@ -1003,10 +1064,83 @@ function editSplitSteps() {
 	return true;
 };
 
+/*
+Enter with the caret at the start of a filled list item or paragraph (nothing selected): an empty new unit of its kind
+above it (an item with its marker, a paragraph), edited at once; the edited text is saved first. The inverse of the
+Backspace merge of an empty item. False (Enter acts as usual) anywhere else.
+*/
+methods.editInsertBefore = function() {
+	var ed = this.editor,
+		caret = this.editorCaret(),
+		unit = ed && ed.id !== -1 ? this.units[ed.id].unit : null;
+	if(!unit || ed.multiline || ed.isNew || !caret || caret[0] !== 0 || caret[1] !== 0 ||
+		!(unit.kind === "item" || (unit.kind === "block" && unit.tag === "p")) ||
+		!/\S/.test(this.wiki.getTiddlerText(this.bufferTitle(), ""))) {
+		return false;
+	}
+	if(this.selectedId !== ed.id) {
+		this.select(ed.id);
+	}
+	if(this.saveEdit() && this.ensureCurrent()) {
+		this.startEdit(this.selectedId, {isNew: true, where: "before"});
+	}
+	return true;
+};
+
+/*
+Delete with the caret at the end of a list item (nothing selected): the item below that merges into this one (see
+mergeSource) comes up, its text after the caret. The inverse of Backspace at the start of that item. False (the key acts
+as usual) anywhere else: not at the end, a blank, new or multi-line item, no such item below.
+*/
+// One undo step for the save and the operation (outline-undo.js)
+methods.editMergeNext = function() {
+	var args = arguments;
+	return this.undoGroup(function() { return editMergeNextSteps.apply(this, args); });
+};
+
+function editMergeNextSteps() {
+	var ed = this.editor,
+		caret = this.editorCaret(),
+		adapter = this.getAdapter(),
+		value = this.wiki.getTiddlerText(this.bufferTitle(), "");
+	if(!ed || ed.multiline || ed.isNew || ed.kind !== "item" || ed.unitKind !== "item" || ed.id === -1 || !adapter ||
+		!adapter.mergeSource || !caret || caret[0] !== value.length || caret[1] !== value.length || !/\S/.test(value)) {
+		return false;
+	}
+	var next = adapter.mergeSource(this.model, ed.id);
+	if(next === -1 || !adapter.merge(this.model.text, this.model, next)) {
+		return false;
+	}
+	if(this.selectedId !== ed.id) {
+		this.select(ed.id);
+	}
+	if(!this.saveEdit() || !this.ensureCurrent()) {
+		return true;
+	}
+	var id = this.selectedId,
+		join = adapter.editSource(this.model.text, this.model, id).length;
+	next = adapter.mergeSource(this.model, id);
+	if(next !== -1 && this.select(next)) {
+		this.operate("merge");
+	}
+	this.editAgain([join, join]);
+	return true;
+}
+
 methods.editAtEnd = function() {
 	var len = this.wiki.getTiddlerText(this.bufferTitle(), "").length;
 	this.editor.caret = [len, len];
 	this.focusEditor();
+};
+
+// Select-mode Ctrl-Enter: an empty new unit below the selected one, as Enter at the end of its editor adds (an item on
+// its level, a paragraph after anything else). In a tiddler without units: a first paragraph
+methods.addBelow = function() {
+	if(this.selectedId === -1) {
+		return this.editSelected();
+	}
+	this.startEdit(this.selectedId, {isNew: true});
+	return true;
 };
 
 // Select-mode Enter. In a tiddler without units: a first paragraph at the end of the text

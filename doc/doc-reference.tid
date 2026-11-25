@@ -23,19 +23,21 @@ type: text/vnd.tiddlywiki
 |`outline-move-up` / `outline-move-down` |alt-Up / alt-Down |Swap with previous / next sibling |
 |`outline-indent` / `outline-promote` |Tab / shift-Tab |Demote / promote by one level |
 |`outline-edit` |Enter |Edit in place (on a transclusion Enter opens the target) |
+|`outline-add` |ctrl-Enter |Edit a new empty unit below the selected one (see New unit) |
 |`outline-delete` |Delete |Delete the unit with its subtree, after a confirmation menu (see Delete) |
 |`outline-undo` / `outline-redo` |ctrl-Z / ctrl-Y, ctrl-shift-Z |Undo / redo the last change made in the outline (see Undo) |
-|`outline-menu` |shift-Enter |Block menu: insert a new block after the unit, or turn it into another type; Up/Down, Enter runs, Escape closes |
+|`outline-menu` |alt-Enter |Block menu: insert a new block after or before the unit, or turn it into another type; Up/Down, Enter runs, Escape closes. In the editor: save, then only //Turn into//; the editor opens again on the unit, also after Escape |
 |`outline-open` |Enter |Open the transclusion target in outline mode |
 |`outline-clear` |Escape |Clear selection |
 |`outline-save` |ctrl-Enter |Save the edit |
-|`outline-continue` |Enter |Save and open a new unit (single-line units). In the middle of a list item's text: split it (see Split) |
+|`outline-continue` |Enter |Save and open a new unit (single-line units). In the middle of a list item's text: split it (see Split); at the start of a filled list item or paragraph: a new empty one above (see New unit) |
 |`outline-newline` |shift-Enter |Newline in the editor (saved as `<br>` in list items and headings) |
 |`outline-indent` / `outline-promote` |Tab / shift-Tab |In the editor too: save, indent / promote, keep editing. On an empty new list item: its level (see New unit) |
 |`outline-move-up` / `outline-move-down` |alt-Up / alt-Down |In the editor too: save, move, keep editing |
 |`outline-edit-up` |ctrl-Up |Editor only: save and edit the previous unit |
 |`outline-edit-down` |ctrl-Down |Editor only: save and edit the next unit |
 |`outline-merge` |Backspace |Editor, caret at the start of a list item: merge it into the item above (see Merge) |
+|`outline-merge-next` |Delete |Editor, caret at the end of a list item: pull the item below up into it (see Merge) |
 |`outline-cancel` |Escape |Discard the edit |
 |`outline-help` |shift-slash |Show / hide the key overview. `?` always works too, whatever the keyboard layout; Escape closes it |
 
@@ -98,7 +100,7 @@ The first entry is active: Delete, Enter deletes; Escape cancels. List items wit
 
 !! Undo
 
-In selection mode Ctrl-Z takes back the last change made in the outline: a move, indent, delete, merge, split, conversion or saved edit; Ctrl-Y (or Ctrl-Shift-Z) does it again. The selection goes back to where it was before the change. A split or merge, and Tab / Alt-Up/Down while editing, save the edited text and change the structure in one step. Inside the editor Ctrl-Z is the text field's own undo.
+In selection mode Ctrl-Z takes back the last change made in the outline: a move, indent, delete, merge, split, conversion or saved edit; Ctrl-Y (or Ctrl-Shift-Z) does it again. The selection goes back to where it was before the change. A split or merge, and Tab / Alt-Up/Down while editing, save the edited text and change the structure in one step. Inside the editor Ctrl-Z and Ctrl-Y are the outline's undo and redo while the field still has the text it opened with (nothing typed, or the typing undone): so a split, merge or move made from the editor is taken back at once, and the editor opens again on the unit selected afterwards. With typed text they are the text field's own.
 
 The history is kept per tiddler in `$:/temp/rimir/outline/undo/<title>` for the running session only, the last `$:/config/rimir/outline/undo-depth` steps (default 20). A new change empties the redo steps. Undo writes only while the tiddler still has the text the outline left: when it was changed elsewhere (another editor, a sync), the history is dropped and nothing is written. Read-only wikis: nothing.
 
@@ -128,19 +130,25 @@ A new list starts at level 1 (`#* a`, `#** b` → `* a`, `** b`). A heading afte
 
 In the editor, caret at the very start of a list item (nothing selected): the item's text goes to the end of the item above it in the list (the previous item in document order: the parent, or the last sub-item of the previous sibling), the item's line goes, its sub-items keep their lines and levels. The editor continues in the item above, at the join. An empty item is simply deleted (also one with sub-items) and the editor goes to the end of the item above; an empty new item is discarded the same way. The first item of a list, other units and multi-line items: a normal Backspace.
 
+Delete with the caret at the very end of a list item is the same merge from above: the item below that Backspace would merge into this one (the next item in document order: the first sub-item, or the next item of the list) comes up, the caret stays at the join. The last item of a list, blank, new and multi-line items: a normal Delete.
+
 !! Split (Enter)
 
 In the editor, caret inside a list item's text (not at its start or end, nothing selected): the text before the caret stays in the item, the text after it goes to a new item directly below, which is edited with the caret at its start. The new item is a sibling with the same marker; when the item has sub-items it becomes their first one, so the sub-items stay with the item. Backspace at the new item's start (merge) gives back the original line.
 
 !! Empty tiddler
 
-A tiddler without units (empty, or only whitespace and comments) shows a hint. Enter opens the editor for a first paragraph, Shift-Enter the block menu with the insert types only; the block goes at the end of the text.
+A tiddler without units (empty, or only whitespace and comments) shows a hint. Enter (or Ctrl-Enter) opens the editor for a first paragraph, Alt-Enter the block menu with the insert types only; the block goes at the end of the text.
 
 !! New unit (Enter)
 
-* List item: same marker, after the item's whole subtree. While it is still empty, Tab / Shift-Tab set its level (one marker character more / less; at most one level below the item above it, at least level 1); the field moves with it and it is written with that marker.
+Enter at the end of the editor saves and opens a new unit after the edited one; Ctrl-Enter in selection mode opens the same new unit after the selected one, without editing that first:
+
+* List item (also a quote line): same marker, after the item's whole subtree. While it is still empty, Tab / Shift-Tab set its level (one marker character more / less; at most one level below the item above it, at least level 1); the field moves with it and it is written with that marker.
 * Heading: paragraph directly under the heading line.
-* Paragraph: paragraph after it.
+* Paragraph, and anything else (code block, table, whole list, ...): paragraph after it.
+
+Enter with the caret at the very start of a filled list item or paragraph saves the edited text and opens an empty new unit right above it: an item with the same marker (sub-items stay with the item below), or a paragraph. Escape or an empty save leaves the text as it was.
 
 !! Block menu
 

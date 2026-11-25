@@ -312,7 +312,7 @@ describe("outline editor", function() {
 
 		function press(r, keyCode, mods) {
 			mods = mods || {};
-			var ev = {keyCode: keyCode, shiftKey: !!mods.shift, altKey: false, ctrlKey: false, metaKey: false,
+			var ev = {keyCode: keyCode, shiftKey: !!mods.shift, altKey: !!mods.alt, ctrlKey: false, metaKey: false,
 				target: r.widget.domNode, defaultPrevented: false, prevented: false,
 				preventDefault: function() { this.prevented = true; }, stopPropagation: function() {}};
 			r.widget.handleKeydown(ev);
@@ -328,10 +328,10 @@ describe("outline editor", function() {
 			press(r, 13);
 		}
 
-		it("shift-enter opens it with insert and turn-into entries for the unit", function() {
+		it("alt-enter opens it with insert and turn-into entries for the unit", function() {
 			var r = render("para\n\n* a\n* b");
 			r.widget.select(r.idOf("para"));
-			expect(press(r, 13, {shift: true}).prevented).toBe(true);
+			expect(press(r, 13, {alt: true}).prevented).toBe(true);
 			var inserts = ["insert:paragraph", "insert:heading1", "insert:heading2", "insert:heading3",
 				"insert:bulleted", "insert:numbered", "insert:quote", "insert:code"];
 			expect(labels(r)).toEqual(inserts.concat(inserts, [
@@ -345,14 +345,14 @@ describe("outline editor", function() {
 			expect(r.widget.menu).toBe(null);
 			// A single bullet: only bulleted/numbered
 			r.widget.select(r.idOf("* a"));
-			press(r, 13, {shift: true});
+			press(r, 13, {alt: true});
 			expect(labels(r)).toEqual(["convert:numbered"]);
 		});
 
 		it("up/down move the active entry; another key closes the menu and acts as usual", function() {
 			var r = render("para\n\nnext");
 			r.widget.select(r.idOf("para"));
-			press(r, 13, {shift: true});
+			press(r, 13, {alt: true});
 			press(r, 40);
 			press(r, 40);
 			expect(r.widget.menu.active).toBe(2);
@@ -368,7 +368,7 @@ describe("outline editor", function() {
 		it("insert opens an editor for the new block; saving inserts it of that type", function() {
 			var r = render("para\n\n! H\n\ntext");
 			r.widget.select(r.idOf("para"));
-			press(r, 13, {shift: true});
+			press(r, 13, {alt: true});
 			choose(r, "insert", "heading2");
 			expect(r.widget.editor).not.toBe(null);
 			expect(r.widget.editor.blockType).toBe("heading2");
@@ -383,7 +383,7 @@ describe("outline editor", function() {
 		it("insert after a heading: a new heading goes after the section, its editor too", function() {
 			var r = render("! H\n\ntext\n\n! I");
 			r.widget.select(r.idOf("! H"));
-			press(r, 13, {shift: true});
+			press(r, 13, {alt: true});
 			choose(r, "insert", "heading1");
 			var host = r.widget.editor.host,
 				textP = r.widget.units[r.idOf("text")].domNodes[0];
@@ -397,7 +397,7 @@ describe("outline editor", function() {
 			var r = render("intro\n\n* a\n* b\n\n!! S\n\nx");
 			function before(id, type) {
 				r.widget.select(id);
-				press(r, 13, {shift: true});
+				press(r, 13, {alt: true});
 				var i = r.widget.menu.entries.findIndex(function(e) { return e.where === "before" && e.type === type; });
 				r.widget.setMenuActive(i);
 				press(r, 13);
@@ -424,7 +424,7 @@ describe("outline editor", function() {
 			expect(r.text()).toBe("first\n\nintro\n\n! Top\n\n* a\n* b\n\n! Two\n\n!! S\n\nx");
 		});
 
-		it("an empty tiddler: a hint, Enter writes a first paragraph, Shift-Enter offers the block types", function() {
+		it("an empty tiddler: a hint, Enter writes a first paragraph, Alt-Enter offers the block types", function() {
 			var r = render("");
 			expect(r.widget.emptyHint).not.toBe(null);
 			expect(press(r, 13).prevented).toBe(true);
@@ -435,11 +435,11 @@ describe("outline editor", function() {
 			r.refresh();
 			expect(r.widget.emptyHint).toBe(null);
 			expect(r.widget.units[r.widget.selectedId].unit.kind).toBe("block");
-			// Only whitespace and a comment: Shift-Enter offers inserts only, the block goes after the comment
+			// Only whitespace and a comment: Alt-Enter offers inserts only, the block goes after the comment
 			r.wiki.addTiddler(new $tw.Tiddler(r.wiki.getTiddler("T"), {text: "<!-- note -->\n\n"}));
 			r.refresh();
 			expect(r.widget.emptyHint).not.toBe(null);
-			press(r, 13, {shift: true});
+			press(r, 13, {alt: true});
 			expect(labels(r).every(function(l) { return l.indexOf("insert:") === 0; })).toBe(true);
 			choose(r, "insert", "heading1");
 			r.type("Title");
@@ -450,7 +450,7 @@ describe("outline editor", function() {
 		it("a new code block: Enter is a newline", function() {
 			var r = render("para");
 			r.widget.select(r.idOf("para"));
-			press(r, 13, {shift: true});
+			press(r, 13, {alt: true});
 			choose(r, "insert", "code");
 			expect(r.widget.editor.multiline).toBe(true);
 			r.type("a\nb");
@@ -461,7 +461,7 @@ describe("outline editor", function() {
 		it("turn into converts the unit and keeps it selected", function() {
 			var r = render("para\n\nnext");
 			r.widget.select(r.idOf("para"));
-			press(r, 13, {shift: true});
+			press(r, 13, {alt: true});
 			choose(r, "convert", "bulleted");
 			expect(r.text()).toBe("* para\n\nnext");
 			r.refresh();
@@ -472,7 +472,7 @@ describe("outline editor", function() {
 		it("a bullet switches its list type with its siblings", function() {
 			var r = render("* a\n* b\n** b1");
 			r.widget.select(r.idOf("* b"));
-			press(r, 13, {shift: true});
+			press(r, 13, {alt: true});
 			choose(r, "convert", "numbered");
 			expect(r.text()).toBe("# a\n# b\n#* b1");
 		});
@@ -480,7 +480,7 @@ describe("outline editor", function() {
 		it("not in read-only wikis", function() {
 			var r = render("para", [{title: "$:/status/IsReadOnly", text: "yes"}]);
 			r.widget.select(r.idOf("para"));
-			expect(press(r, 13, {shift: true}).prevented).toBe(true);
+			expect(press(r, 13, {alt: true}).prevented).toBe(true);
 			expect(r.widget.menu).toBe(null);
 		});
 	});
@@ -725,7 +725,7 @@ describe("outline editor", function() {
 		expect(r.widget.editor.isNew).toBe(true);
 	});
 
-	it("shift-enter right after a move (before the refresh) edits the moved unit", function() {
+	it("enter right after a move (before the refresh) edits the moved unit", function() {
 		var r = render("* a\n* b\n* c");
 		r.widget.select(r.idOf("* a"));
 		var ev = {keyCode: 40, shiftKey: false, altKey: true, ctrlKey: false, metaKey: false,
@@ -771,6 +771,15 @@ describe("outline editor", function() {
 		expect(r.widget.editor).toBe(null);
 		expect(siblings(host).indexOf(host)).toBe(-1);
 		expect(r.wiki.tiddlerExists(BUF + "T")).toBe(false);
+		// An item, a heading: unchanged while the field shows what it opened with (without the marker)
+		["* a\n* b", "! H"].forEach(function(t) {
+			var u = render(t);
+			u.widget.startEdit(0);
+			expect(u.widget.editChanged()).toBe(false);
+			u.type("x");
+			expect(u.widget.editChanged()).toBe(true);
+			u.widget.cancelEdit();
+		});
 		// A blank new unit is unchanged too
 		var n = render("* a");
 		n.widget.startEdit(n.idOf("* a"), {isNew: true});

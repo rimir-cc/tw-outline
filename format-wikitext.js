@@ -272,18 +272,25 @@ exports.replace = function(text, model, id, newSource) {
 };
 
 /*
-Insert a new sibling unit (item) or first block (heading/block); null for blank source. A new item's text that
+Insert a new sibling unit (item) or first block (heading/block) after unit `id`, or, `where` "before", in front of it
+(an item: a sibling with its marker; anything else: a paragraph); null for blank source. A new item's text that
 starts with the item's own marker and a space (typed out of habit) loses that marker: it is added anyway.
 */
-exports.insertNew = function(text, model, id, newSource, marker) {
+exports.insertNew = function(text, model, id, newSource, marker, where) {
 	var u = model.units[id];
 	newSource = u ? stripTypedMarker(u, newSource) : newSource;
 	if(!u || !newSource || !newSource.trim()) { return null; }
 	var nl = utils.eol(text), pos, insert, select;
-	if(u.kind === "item") {
+	if(u.kind === "item" && where === "before") {
+		pos = u.start;
+		insert = u.marker + " " + toBreaks(newSource) + nl;
+		select = pos;
+	} else if(u.kind === "item") {
 		pos = u.subtreeEnd;
 		insert = nl + (marker || u.marker) + " " + toBreaks(newSource);
 		select = pos + nl.length;
+	} else if(where === "before") {
+		return insertBlockBefore(text, u, newSource);
 	} else {
 		return insertBlockAt(text, u.end, newSource);
 	}
@@ -316,8 +323,16 @@ function insertBlockAt(text, pos, source) {
 	return {text: utils.splice(text, pos, pos, insert), select: pos + 2 * nl.length};
 }
 
+// Insert block `source` in front of unit `u`, set apart by blank lines (it ends the section above)
+function insertBlockBefore(text, u, source) {
+	var nl = utils.eol(text),
+		before = text.substring(0, u.start),
+		lead = !/\S/.test(before) || /\n[ \t]*\r?\n[ \t]*$/.test(before) ? "" : (/\n[ \t]*$/.test(before) ? nl : nl + nl);
+	return {text: utils.splice(text, u.start, u.start, lead + source + nl + nl), select: u.start + lead.length};
+}
+
 /*
-Block types of the Shift-Enter menu: the unit kind they produce and their source from content (line breaks `nl`).
+Block types of the block menu (Alt-Enter): the unit kind they produce and their source from content (line breaks `nl`).
 Headings, list items and quote lines are one source line: their line breaks become <br>.
 */
 var BLOCK_TYPES = {
@@ -362,9 +377,7 @@ exports.insertBlock = function(text, model, id, type, content, where) {
 	} else if(!u || u.kind === "item") {
 		return null;
 	} else if(where === "before") {
-		var before = text.substring(0, u.start),
-			lead = !/\S/.test(before) || /\n[ \t]*\r?\n[ \t]*$/.test(before) ? "" : (/\n[ \t]*$/.test(before) ? nl : nl + nl);
-		result = {text: utils.splice(text, u.start, u.start, lead + t.make(content, nl) + nl + nl), select: u.start + lead.length};
+		result = insertBlockBefore(text, u, t.make(content, nl));
 	} else {
 		result = insertBlockAt(text, exports.insertsAfterSubtree(model, id, type) ? u.subtreeEnd : u.end, t.make(content, nl));
 	}
@@ -728,6 +741,18 @@ exports.itemBefore = function(model, id, pos) {
 exports.mergeTarget = function(model, id) {
 	var u = model.units[id];
 	return u ? exports.itemBefore(model, id, u.start) : -1;
+};
+
+// The item that merges into list item `id` (whose mergeTarget it is: the next item in document order), or -1
+exports.mergeSource = function(model, id) {
+	var u = model.units[id], next = null;
+	if(!u || u.kind !== "item") { return -1; }
+	model.units.forEach(function(d) {
+		if(d.kind === "item" && d.start > u.start && (!next || d.start < next.start)) {
+			next = d;
+		}
+	});
+	return next && exports.mergeTarget(model, next.id) === id ? next.id : -1;
 };
 
 /*

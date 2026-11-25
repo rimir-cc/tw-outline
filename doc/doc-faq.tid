@@ -24,7 +24,7 @@ In the view toolbar, per tiddler. State is `$:/state/rimir/outline/on/<title>`.
 
 !! How do I put a heading above a list or paragraph?
 
-Select the list (or paragraph, or lower heading), Shift-Enter, and pick a heading under //Insert before//. Or insert it anywhere after and press Alt-Up: a heading moves up over the blocks above it.
+Select the list (or paragraph, or lower heading), Alt-Enter, and pick a heading under //Insert before//. Or insert it anywhere after and press Alt-Up: a heading moves up over the blocks above it.
 
 !! Can I move a unit into another list or section?
 

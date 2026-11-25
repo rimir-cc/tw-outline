@@ -53,6 +53,7 @@ var ACTIONS = [
 	{name: "outline-clear", run: function(w) { return w.clearSelection(); }},
 	{name: "outline-open", run: function(w) { return w.openTransclusion(); }},
 	{name: "outline-edit", run: function(w) { return w.editSelected(); }},
+	{name: "outline-add", run: function(w) { return w.addBelow(); }},
 	{name: "outline-menu", run: function(w) { return w.openMenu(); }},
 	{name: "outline-delete", run: function(w) { return w.deleteSelected(); }},
 	{name: "outline-move-up", run: function(w) { return w.operate("move", -1); }},

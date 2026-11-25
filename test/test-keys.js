@@ -103,11 +103,11 @@ describe("outline selection and keys", function() {
 		var wiki = makeWiki(),
 			expected = {
 				"outline-up": "Up", "outline-down": "Down", "outline-move-up": "alt-Up", "outline-move-down": "alt-Down",
-				"outline-indent": "Tab", "outline-promote": "shift-Tab", "outline-edit": "Enter", "outline-menu": "shift-Enter",
+				"outline-indent": "Tab", "outline-promote": "shift-Tab", "outline-edit": "Enter", "outline-menu": "alt-Enter", "outline-add": "ctrl-Enter",
 				"outline-parent": "Left", "outline-child": "Right", "outline-up-deep": "ctrl-Up", "outline-down-deep": "ctrl-Down", "outline-edit-up": "ctrl-Up", "outline-edit-down": "ctrl-Down",
 				"outline-open": "Enter", "outline-clear": "Escape", "outline-save": "ctrl-Enter",
 				"outline-continue": "Enter", "outline-newline": "shift-Enter", "outline-cancel": "Escape",
-				"outline-help": "shift-slash", "outline-delete": "Delete", "outline-merge": "Backspace",
+				"outline-help": "shift-slash", "outline-delete": "Delete", "outline-merge": "Backspace", "outline-merge-next": "Delete",
 				"outline-undo": "ctrl-Z", "outline-redo": "ctrl-Y ctrl-shift-Z"
 			};
 		Object.keys(expected).forEach(function(name) {
@@ -430,8 +430,8 @@ describe("outline selection and keys", function() {
 		key(r, KEYS.enter);
 		expect(opened).toEqual(["X"]);
 		expect(r.widget.editor).toBe(null);
-		// Shift-Enter: the block menu; its first entry edits the line
-		key(r, KEYS.enter, {shift: true});
+		// Alt-Enter: the block menu; its first entry edits the line
+		key(r, KEYS.enter, {alt: true});
 		expect(r.widget.menu).not.toBe(null);
 		expect(r.widget.menu.entries[0].action).toBe("edit");
 		key(r, KEYS.enter);

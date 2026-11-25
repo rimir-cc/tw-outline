@@ -11,11 +11,12 @@ outline-move-down: Outline: move the selected unit and its subtree below its nex
 outline-indent: Outline: indent the selected unit and its subtree by one level
 outline-promote: Outline: promote the selected unit and its subtree by one level
 outline-edit: Outline: edit the selected unit in place
-outline-menu: Outline: block menu - insert a new block after the selected unit, or turn it into another type
+outline-menu: Outline: block menu - insert a new block after or before the selected unit, or turn it into another type (in the editor: turn the edited unit into another type)
 outline-open: Outline: open the transcluded tiddler of the selected unit in outline mode
+outline-add: Outline: edit a new empty unit below the selected one (a list item: an item on its level; anything else: a paragraph)
 outline-clear: Outline: clear the selection
 outline-save: Outline editor: save the edit
-outline-continue: Outline editor: save and start a new unit below (list items, headings, paragraphs); in the middle of a list item: split it at the caret
+outline-continue: Outline editor: save and start a new unit below (list items, headings, paragraphs); in the middle of a list item: split it at the caret; at the start of a filled list item or paragraph: a new empty one above
 outline-newline: Outline editor: insert a line break
 outline-cancel: Outline editor: discard the edit
 outline-edit-up: Outline editor: save and edit the previous unit
@@ -23,5 +24,6 @@ outline-edit-down: Outline editor: save and edit the next unit
 outline-help: Outline: show or hide the key overview
 outline-delete: Outline: delete the selected unit (asks first)
 outline-merge: Outline editor: at the start of a list item, merge it into the item above (an empty item is deleted)
+outline-merge-next: Outline editor: at the end of a list item, pull the item below up into it
 outline-undo: Outline: undo the last change made in the outline
 outline-redo: Outline: redo the last undone change

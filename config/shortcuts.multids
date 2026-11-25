@@ -11,8 +11,9 @@ outline-move-down: alt-Down
 outline-indent: Tab
 outline-promote: shift-Tab
 outline-edit: Enter
-outline-menu: shift-Enter
+outline-menu: alt-Enter
 outline-open: Enter
+outline-add: ctrl-Enter
 outline-clear: Escape
 outline-save: ctrl-Enter
 outline-continue: Enter
@@ -23,5 +24,6 @@ outline-edit-down: ctrl-Down
 outline-help: shift-slash
 outline-delete: Delete
 outline-merge: Backspace
+outline-merge-next: Delete
 outline-undo: ctrl-Z
 outline-redo: ctrl-Y ctrl-shift-Z

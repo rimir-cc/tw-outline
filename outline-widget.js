@@ -50,7 +50,7 @@ OutlineWidget.prototype = new Widget();
 keys.install(OutlineWidget.prototype);
 // In-place editor: startEdit, saveEdit, cancelEdit, reattachEditor, handleEditorKeydown, openTarget
 editor.install(OutlineWidget.prototype);
-// Block menu (Shift-Enter): openMenu, closeMenu, handleMenuKeydown
+// Block menu (Alt-Enter): openMenu, closeMenu, handleMenuKeydown
 menu.install(OutlineWidget.prototype);
 undo.install(OutlineWidget.prototype);
 // System clipboard (copy, cut, paste events): handleCopy, handleCut, handlePaste
@@ -182,7 +182,7 @@ OutlineWidget.prototype.mapUnits = function() {
 
 /*
 A tiddler without units (empty, or only whitespace and comments) has nothing to select: a hint says that Enter writes
-a first paragraph and Shift-Enter offers the block types. Not part of the body's widget tree; hidden while editing.
+a first paragraph and Alt-Enter offers the block types. Not part of the body's widget tree; hidden while editing.
 */
 OutlineWidget.prototype.showEmptyHint = function() {
 	var show = !this.hasSelectable() && !this.isReadOnly() && !!this.getAdapter();

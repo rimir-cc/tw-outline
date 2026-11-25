@@ -3,11 +3,13 @@ title: $:/plugins/rimir/outline/outline-menu.js
 type: application/javascript
 module-type: library
 
-Menus of the $outline widget at the selected unit: the block menu (outline-menu key, default Shift-Enter) and the
-delete confirmation (outline-delete key, default Delete), both in selection mode.
+Menus of the $outline widget at the selected unit: the block menu (outline-menu key, default Alt-Enter) and the
+delete confirmation (outline-delete key, default Delete), both in selection mode; the block menu also from the editor.
 install(proto) adds these methods to the widget prototype:
 
-  openMenu()            - open the block menu at the selected unit; false when nothing is selected
+  openMenu(opts)        - open the block menu at the selected unit; false when nothing is selected. opts.convertOnly:
+                          only the "Turn into" entries (from the editor, after its save; false when there are none),
+                          and the editor opens again afterwards, also on Escape, the caret at opts.caret
   deleteSelected()      - delete the selected unit, after the confirmation menu (see below)
   showMenu(id, entries) - show a menu of entries at unit id
   closeMenu()           - remove it
@@ -65,9 +67,19 @@ methods.label = function(key) {
 	return this.wiki.getTiddlerText(LABEL_PREFIX + key, key);
 };
 
-methods.openMenu = function() {
+methods.openMenu = function(opts) {
 	var id = this.selectedId;
 	this.closeMenu();
+	if(opts && opts.convertOnly) {
+		var entries = id === -1 || this.editor ? [] : this.menuEntries(id).filter(function(entry) {
+			return entry.action === "convert";
+		});
+		this.showMenu(id, entries);
+		if(this.menu) {
+			this.menu.reedit = {caret: opts.caret};
+		}
+		return !!this.menu;
+	}
 	if(id === -1 && !this.editor && !this.isReadOnly() && !this.hasSelectable()) {
 		this.showMenu(-1, this.menuEntries(-1));
 		return true;
@@ -203,13 +215,17 @@ methods.runMenuEntry = function(index) {
 	if(!entry) {
 		return;
 	}
-	var id = menu.id;
+	var id = menu.id,
+		reedit = menu.reedit;
 	this.closeMenu();
 	if(id !== -1 && id !== this.selectedId) {
 		this.select(id);
 	}
 	dom.focus(this.domNode);
-	if(entry.action === "cancel") {
+	if(reedit) {
+		this.operate("convert", entry.type);
+		this.editAgain(reedit.caret);
+	} else if(entry.action === "cancel") {
 		return;
 	} else if(entry.action === "delete") {
 		this.operate("deleteUnit", entry.arg);
@@ -233,7 +249,13 @@ methods.handleMenuKeydown = function(event) {
 		case KEY.home: this.setMenuActive(0); return true;
 		case KEY.end: this.setMenuActive(menu.entries.length - 1); return true;
 		case KEY.enter: this.runMenuEntry(menu.active); return true;
-		case KEY.escape: this.closeMenu(); return true;
+		case KEY.escape:
+			var reedit = menu.reedit;
+			this.closeMenu();
+			if(reedit) {
+				this.editAgain(reedit.caret);
+			}
+			return true;
 	}
 	return false;
 };
