@@ -178,10 +178,10 @@ methods.showMenu = function(id, entries) {
 	this.setMenuActive(0);
 };
 
-// Below the selected unit's first DOM node, inside the (position: relative) outline container
+// Below the selected unit's first shown DOM node (dom.firstShown), inside the (position: relative) outline container
 methods.positionMenu = function() {
 	var menu = this.menu,
-		anchor = menu.id === -1 ? this.emptyHint : this.units[menu.id].domNodes[0];
+		anchor = menu.id === -1 ? this.emptyHint : dom.firstShown(this.units[menu.id].domNodes);
 	if(!anchor || !anchor.getBoundingClientRect || !this.domNode.getBoundingClientRect) {
 		return;
 	}

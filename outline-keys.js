@@ -257,7 +257,7 @@ methods.step = function(dir, deep) {
 		return false;
 	}
 	this.select(i);
-	scrollIntoView(this.units[i].domNodes[0]);
+	scrollIntoView(dom.firstShown(this.units[i].domNodes));
 	return true;
 };
 
@@ -276,7 +276,7 @@ methods.stepTree = function(dir) {
 	var target = dir < 0 ? this.treeParent(id) : this.treeChild(id);
 	if(target !== -1) {
 		this.select(target);
-		scrollIntoView(this.units[target].domNodes[0]);
+		scrollIntoView(dom.firstShown(this.units[target].domNodes));
 	}
 	return true;
 };

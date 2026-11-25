@@ -27,6 +27,20 @@ exports.focus = function(node) {
 	}
 };
 
+/*
+The first of a unit's DOM nodes that takes up space on the page (has layout boxes), else the first one. Plugins can
+put hidden elements in front of a unit's own (an empty, hidden caption before a code block): menus and scrolling go
+by what is shown.
+*/
+exports.firstShown = function(nodes) {
+	for(var i = 0; i < nodes.length; i++) {
+		if(nodes[i].getClientRects && nodes[i].getClientRects().length) {
+			return nodes[i];
+		}
+	}
+	return nodes[0];
+};
+
 exports.scrollIntoView = function(node) {
 	if(node && node.scrollIntoView) {
 		node.scrollIntoView({block: "nearest"});
