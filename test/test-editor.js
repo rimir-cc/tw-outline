@@ -167,6 +167,56 @@ describe("outline editor", function() {
 		expect(hasClass(full.textarea, "rr-ol-editor-compact")).toBe(false);
 	});
 
+	describe("double-click on another unit while editing", function() {
+
+		function dbl(r, source) {
+			r.widget.handleDblClick({target: r.widget.units[r.idOf(source)].domNodes[0], preventDefault: function() {}});
+		}
+		function edited(r) { return r.widget.model.text.substring(r.widget.units[r.widget.editor.id].unit.start, r.widget.units[r.widget.editor.id].unit.end); }
+
+		it("saves the edited unit and edits the clicked one, after and before it", function() {
+			var r = render("para\n\n* a\n* b\n\nend");
+			r.widget.startEdit(r.idOf("* a"));
+			r.type("A longer");
+			dbl(r, "end");
+			expect(r.text()).toBe("para\n\n* A longer\n* b\n\nend");
+			expect(edited(r)).toBe("end");
+			expect(r.buffer()).toBe("end");
+			r.type("END");
+			dbl(r, "para");
+			expect(r.text()).toBe("para\n\n* A longer\n* b\n\nEND");
+			expect(edited(r)).toBe("para");
+		});
+
+		it("a blanked unit is deleted, the clicked one is still found", function() {
+			var r = render("* a\n* b\n* c");
+			r.widget.startEdit(r.idOf("* a"));
+			r.type("");
+			dbl(r, "* c");
+			expect(r.text()).toBe("* b\n* c");
+			expect(edited(r)).toBe("* c");
+		});
+
+		it("a new unit is saved, then the clicked unit is edited", function() {
+			var r = render("* a\n* b");
+			r.widget.startEdit(r.idOf("* a"), {isNew: true});
+			r.type("new");
+			dbl(r, "* b");
+			expect(r.text()).toBe("* a\n* new\n* b");
+			expect(edited(r)).toBe("* b");
+		});
+
+		it("a refused save keeps the editor on its unit", function() {
+			var r = render("* a\n** a1\n* b");
+			r.widget.startEdit(r.idOf("* a"));
+			r.type("");
+			dbl(r, "* b");
+			expect(r.text()).toBe("* a\n** a1\n* b");
+			expect(edited(r)).toBe("* a");
+			expect(notes(r).length).toBe(1);
+		});
+	});
+
 	describe("ctrl-up/down move the editor", function() {
 
 		function key(r, keyCode) { return editorKey(r, keyCode, {ctrl: true}); }

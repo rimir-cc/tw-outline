@@ -403,7 +403,8 @@ function blockContent(text, u) {
 
 /*
 The "Turn into" types offered for unit `id`: a bullet switches between bulleted and numbered, a whole list too;
-paragraphs, headings and code blocks turn into the other block types. The current type is left out.
+paragraphs, headings and code blocks turn into the other block types (a heading also into another level). The current
+type is left out.
 */
 exports.convertTypes = function(model, id) {
 	var u = model.units[id];
@@ -420,7 +421,7 @@ exports.convertTypes = function(model, id) {
 	var all = u.tag === "codeblock" ? ["paragraph", "bulleted", "numbered", "quote"] :
 		["paragraph", "heading1", "heading2", "heading3", "bulleted", "numbered", "quote", "code"];
 	return all.filter(function(type) {
-		return !(type === "paragraph" && u.tag === "p") && !(u.kind === "heading" && /^heading/.test(type));
+		return !(type === "paragraph" && u.tag === "p") && !(u.kind === "heading" && type === "heading" + u.level);
 	});
 };
 
@@ -462,7 +463,8 @@ function subtreeItems(model, u) {
 /*
 Turn unit `id` into block type `type` (see convertTypes). A bullet switches with all its siblings of the same level
 (one list type per level; their sub-items follow at that marker position). A whole list switches at all levels.
-Other units are rewritten from their content and set apart by blank lines. The result is parsed again: it must
+A heading that changes its level keeps its line apart from the !s. Other units are rewritten from their content and
+set apart by blank lines. The result is parsed again: it must
 yield a unit of the new kind at the unit's place and no other change in the unit count, otherwise null.
 */
 exports.convert = function(text, model, id, type) {
@@ -477,6 +479,9 @@ exports.convert = function(text, model, id, type) {
 		newText = switchMarkers(text, items, u.level - 1, ch);
 	} else if(u.kind === "list") {
 		newText = switchMarkers(text, subtreeItems(model, u), -1, ch);
+	} else if(u.kind === "heading" && BLOCK_TYPES[type].kind === "heading") {
+		// Another level: only the heading's own !s change (its class and content stay, its section is not touched)
+		newText = utils.splice(text, u.start, u.start + u.level, BLOCK_TYPES[type].make("").replace(/ $/, ""));
 	} else {
 		var source = BLOCK_TYPES[type].make(blockContent(text, u).replace(/\n/g, nl), nl),
 			before = text.substring(0, u.start),

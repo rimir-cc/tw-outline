@@ -815,6 +815,33 @@ methods.editStep = function(dir) {
 };
 
 /*
+Double-click on unit `id` while editing: save, then edit that unit at its place in the saved text. A refused save
+keeps the editor open with its notice; a unit that cannot be found again leaves the outline in selection mode.
+*/
+methods.editOther = function(id) {
+	var ed = this.editor,
+		target = this.units[id] && this.units[id].unit;
+	if(!ed || !target) {
+		return false;
+	}
+	var oldText = this.model.text;
+	if(ed.id !== -1 && this.selectedId !== ed.id) {
+		this.select(ed.id);
+	}
+	if(!this.saveEdit()) {
+		return true;
+	}
+	this.ensureCurrent();
+	var start = utils.mapPosition(oldText, this.model.text, target.start),
+		self = this,
+		next = start === -1 ? -1 : model.findUnit(this.model, start, target.kind, function(i) { return self.isSelectable(i); });
+	if(next !== -1 && this.select(next)) {
+		this.startEdit(next);
+	}
+	return true;
+};
+
+/*
 Tab / Shift-Tab and Alt-Up/Down while editing: like in selection mode, on the edited unit. Save, indent, promote or
 move the unit with its subtree, edit it again (at its new place) with the caret where it was. A refused save keeps the editor. With empty text the key is
 consumed and nothing changes.

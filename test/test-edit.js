@@ -121,7 +121,7 @@ describe("outline edit", function() {
 		it("offers the types that fit the unit", function() {
 			var text = "! H\n\npara\n\n* a\n** a1\n\n```\nc\n```\n\n<div>\n\nx\n\n</div>", m = build(text);
 			expect(fmt.convertTypes(m, idOf(m, "para"))).toEqual(["heading1", "heading2", "heading3", "bulleted", "numbered", "quote", "code"]);
-			expect(fmt.convertTypes(m, idOf(m, "! H"))).toEqual(["paragraph", "bulleted", "numbered", "quote", "code"]);
+			expect(fmt.convertTypes(m, idOf(m, "! H"))).toEqual(["paragraph", "heading2", "heading3", "bulleted", "numbered", "quote", "code"]);
 			expect(fmt.convertTypes(m, idOf(m, "* a"))).toEqual(["numbered"]);
 			expect(fmt.convertTypes(m, idOf(m, "```\nc\n```"))).toEqual(["paragraph", "bulleted", "numbered", "quote"]);
 			var div = m.units.filter(function(u) { return u.kind === "container"; })[0].id;
@@ -136,6 +136,19 @@ describe("outline edit", function() {
 			var r = conv("p", "p", "numbered");
 			expect(r.text).toBe("# p");
 			expect(r.kind).toBe("item");
+		});
+		it("a heading changes its level: only its own !s, its class stays, its section is not touched", function() {
+			var text = "!! H\n\npara\n\n!!! S\n\nx", m = build(text);
+			expect(fmt.convertTypes(m, idOf(m, "!! H"))).toEqual(["paragraph", "heading1", "heading3", "bulleted", "numbered", "quote", "code"]);
+			var r = conv(text, "!! H", "heading1");
+			expect(r.text).toBe("! H\n\npara\n\n!!! S\n\nx");
+			expect(r.kind).toBe("heading");
+			expect(r.select).toBe(0);
+			expect(conv(text, "!! H", "heading3").text).toBe("!!! H\n\npara\n\n!!! S\n\nx");
+			expect(conv("!!.cls H<br>two", "!!.cls H<br>two", "heading1").text).toBe("!.cls H<br>two");
+			// Deeper than the menu's levels: all three are offered
+			expect(fmt.convertTypes(build("!!!! D"), 0)).toEqual(["paragraph", "heading1", "heading2", "heading3", "bulleted", "numbered", "quote", "code"]);
+			expect(conv("!!.cls H", "!!.cls H", "heading2")).toBeNull();
 		});
 		it("neighbours stay apart: a converted heading does not merge with the paragraph after it", function() {
 			var r = conv("! H\npara", "! H", "paragraph");

@@ -47,4 +47,20 @@ describe("outline text-utils", function() {
 		expect(tu.relocate("* a\n* a", "* a")).toBe(-1);
 		expect(tu.relocate("abc", "")).toBe(-1);
 	});
+
+	it("mapPosition follows a position over a change: unchanged before it, shifted after it", function() {
+		// After the change
+		expect(tu.mapPosition("a\n\nb", "ab\n\nb", 3)).toBe(4);
+		// Before the change
+		expect(tu.mapPosition("x\n\na", "x\n\nab", 0)).toBe(0);
+		// A deleted line before it (the common start "* " is not taken for unchanged text)
+		expect(tu.mapPosition("* a\n* b", "* b", 4)).toBe(0);
+		// Inserted text before it
+		expect(tu.mapPosition("* a\n* b", "* a\n* new\n* b", 4)).toBe(10);
+		expect(tu.mapPosition("abc", "abc", 1)).toBe(1);
+	});
+
+	it("mapPosition returns -1 for a position inside the changed text", function() {
+		expect(tu.mapPosition("abcdef", "abXYef", 3)).toBe(-1);
+	});
 });

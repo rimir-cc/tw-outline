@@ -37,3 +37,22 @@ exports.relocate = function(newText, oldSlice) {
 	}
 	return first;
 };
+
+/*
+Position `pos` of oldText in newText, where newText is oldText with one stretch changed: unchanged before the change,
+shifted by the length difference after it; -1 inside the changed stretch. The common end is taken first, so a
+deleted or inserted line before `pos` is not mistaken for unchanged text at the start.
+*/
+exports.mapPosition = function(oldText, newText, pos) {
+	var max = Math.min(oldText.length, newText.length), suffix = 0, prefix = 0;
+	while(suffix < max && oldText.charAt(oldText.length - 1 - suffix) === newText.charAt(newText.length - 1 - suffix)) {
+		suffix++;
+	}
+	while(prefix < max - suffix && oldText.charAt(prefix) === newText.charAt(prefix)) {
+		prefix++;
+	}
+	if(pos >= oldText.length - suffix) {
+		return pos + newText.length - oldText.length;
+	}
+	return pos < prefix ? pos : -1;
+};

@@ -61,7 +61,7 @@ The widget sets `data-ol-type` on each unit's first DOM node (`unitType` in `dom
 
 The //keys// tab and the overlay (`?` in an outline, or the small ? button at its top right) show the same table, `$:/plugins/rimir/outline/ui/keys-table`, with the keys read live from the config. Its groups are the tiddlers listed in `$:/plugins/rimir/outline/key-groups`: each has a `caption`, an optional `hint`, a `list` of shortcut names and, optionally, text shown after the keys (the fixed block menu keys). The settings tab uses the same groups.
 
-A double-click on a unit opens the editor on it (on a transclusion: its line; links and buttons keep their click).
+A double-click on a unit opens the editor on it (on a transclusion: its line; links and buttons keep their click). While another unit is edited, that one is saved first (like Ctrl-Up/Down; a refused save keeps its editor open with the notice).
 
 In multi-line units (code blocks, tables, widgets, `"""` items) Enter is a plain newline and only Ctrl-Enter saves.
 
@@ -152,7 +152,7 @@ Enter with the caret at the very start of a filled list item or paragraph saves 
 
 !! Block menu
 
-Insert before offers the same types as Insert after and puts the block directly above the selected unit (it ends the section above; above a list or a lower heading this is the way to put a heading in front of it). Turning a paragraph or heading into a bulleted or numbered item next to a list of that type joins that list (TW continues a list over blank lines).
+Insert before offers the same types as Insert after and puts the block directly above the selected unit (it ends the section above; above a list or a lower heading this is the way to put a heading in front of it). Turning a heading into another level (Heading 1 to 3) changes only its own `!`s: its class and text stay, the headings of its section keep their levels (Tab / Shift-Tab change the whole section, also to levels 4 to 6). Turning a paragraph or heading into a bulleted or numbered item next to a list of that type joins that list (TW continues a list over blank lines).
 
 |!Selected |!Insert after / before |!Turn into |
 |Paragraph |Paragraph, Heading 1–3, Bulleted/Numbered list, Quote, Code block |Heading 1–3, Bulleted/Numbered list, Quote, Code block |

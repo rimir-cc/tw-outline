@@ -520,8 +520,8 @@ methods.unitIdAt = function(node) {
 };
 
 /*
-Double-click on a unit edits it (a transclusion: its line, not the target). Not inside the editor, not on links,
-buttons or inputs; the word the double-click selected is deselected.
+Double-click on a unit edits it (a transclusion: its line, not the target); while another unit is edited, that one is
+saved first. Not inside the editor, not on links, buttons or inputs; the word the double-click selected is deselected.
 */
 methods.handleDblClick = function(event) {
 	var node = event.target;
@@ -546,7 +546,9 @@ methods.handleDblClick = function(event) {
 	if(view && view.getSelection) {
 		view.getSelection().removeAllRanges();
 	}
-	if(this.select(id)) {
+	if(this.editor && this.editor.id !== id) {
+		this.editOther(id);
+	} else if(this.select(id)) {
 		this.startEdit(id);
 	}
 };

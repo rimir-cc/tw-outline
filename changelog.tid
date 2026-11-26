@@ -4,6 +4,7 @@ type: text/vnd.tiddlywiki
 ! Changelog
 
 |!Version |!Date |!Changes |
+|0.0.14 |2026-11-26 |Turn into: a heading turns into another heading level (only its `!`s change, its section keeps its levels). A double-click on another unit while editing saves the edited unit and opens the editor on the clicked one. |
 |0.0.13 |2026-11-25 |Fix: the block menu opened at the top of the page on units whose first element is hidden (code blocks with a plugin that adds a hidden caption before them); the menu and scrolling now go by the first visible element. |
 |0.0.12 |2026-11-25 |Keys: Ctrl-Enter in selection mode starts a new empty unit below the selection (an item on its level, else a paragraph). In the editor, Enter at the start of a filled item or paragraph opens an empty one above, Delete at the end of an item pulls the item below up, Alt-Enter turns the edited unit into another type, and Ctrl-Z / Ctrl-Y undo / redo the outline's last change (a split, merge or move) while nothing is typed. The block menu moves from Shift-Enter to Alt-Enter. Fix: an untouched editor of an item or heading counted as changed. |
 |0.0.11 |2026-11-25 |Fix: the editor left out list markers and heading `!`s, but showed a code block's fence lines and the `>`s of a whole quote; it now shows only the content of those too (also `<<<` quotes), saving puts the markup back. |
