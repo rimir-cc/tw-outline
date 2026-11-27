@@ -14,7 +14,6 @@ describe("outline editor", function() {
 
 	var SEL = "$:/temp/rimir/outline/selection/",
 		BUF = "$:/temp/rimir/outline/edit/",
-		ON = "$:/state/rimir/outline/on/",
 		EDITOR = "$:/plugins/rimir/outline/ui/editor",
 		KEYS = {enter: 13, escape: 27};
 
@@ -54,6 +53,7 @@ describe("outline editor", function() {
 			container = $tw.fakeDocument.createElement("div");
 		root.render(container, null);
 		var r = {root: root, widget: findWidget(root, "outline"), wiki: wiki};
+		r.widget.wake();
 		r.refresh = function(extra) {
 			var changes = {T: {modified: true}};
 			changes[SEL + "T"] = {modified: true};
@@ -84,7 +84,9 @@ describe("outline editor", function() {
 			root = r.wiki.makeWidget(parser, {document: $tw.fakeDocument}),
 			container = $tw.fakeDocument.createElement("div");
 		root.render(container, null);
-		return {root: root, widget: findWidget(root, "outline")};
+		var widget = findWidget(root, "outline");
+		widget.wake();
+		return {root: root, widget: widget};
 	}
 
 	function notes(r) {
@@ -807,10 +809,15 @@ describe("outline editor", function() {
 			preventDefault: function() { this.prevented = true; }, stopPropagation: function() {}};
 		r.widget.handleKeydown(ev);
 		expect(ev.prevented).toBe(true);
-		expect(r.wiki.getTiddlerText(ON + "X")).toBe("yes");
+		// The target opens awake, its first unit selected
+		expect(r.wiki.getTiddler(SEL + "X").fields.start).toBe("0");
 		expect(events.length).toBe(1);
 		expect(events[0].type).toBe("tm-navigate");
 		expect(events[0].navigateTo).toBe("X");
+		// An existing selection there is kept
+		r.wiki.addTiddler({title: SEL + "X", start: "4", index: "1", kind: "block"});
+		r.widget.openTarget("X");
+		expect(r.wiki.getTiddler(SEL + "X").fields.start).toBe("4");
 	});
 
 	it("destroying the widget removes the editor; an unchanged buffer is discarded", function() {

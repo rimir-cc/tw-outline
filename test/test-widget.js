@@ -31,9 +31,16 @@ describe("outline widget", function() {
 		return {root: root, container: container};
 	}
 
-	function renderOutline(wiki, title) {
+	// An idle outline (as rendered by the body template)
+	function renderIdle(wiki, title) {
 		var r = render(wiki, "<$outline tiddler=\"" + title + "\"><$transclude $tiddler=\"" + title + "\" $mode=\"block\"/></$outline>");
 		r.widget = findWidget(r.root, "outline");
+		return r;
+	}
+
+	function renderOutline(wiki, title) {
+		var r = renderIdle(wiki, title);
+		r.widget.wake();
 		return r;
 	}
 
@@ -297,8 +304,9 @@ describe("outline widget", function() {
 		var wiki = makeWiki([{title: "T", text: "para\n\n```\none\n```\n\n* a\n\n```\ntwo\n```\n\nend"}]),
 			r = render(wiki, "\\widget $codeblock(code, language)\n<div class=\"kk-cap\">cap</div><div class=\"kk-code\"><$genesis $type=\"$codeblock\" $remappable=\"no\" code=<<code>> language=<<language>>/></div>\n\\end\n" +
 				"<$outline tiddler=\"T\"><$transclude $tiddler=\"T\" $mode=\"block\"/></$outline>"),
-			w = findWidget(r.root, "outline"),
-			codes = w.model.units.filter(function(u) { return u.tag === "codeblock"; });
+			w = findWidget(r.root, "outline");
+		w.wake();
+		var codes = w.model.units.filter(function(u) { return u.tag === "codeblock"; });
 		expect(codes.length).toBe(2);
 		codes.forEach(function(u, i) {
 			var nodes = w.units[u.id].domNodes;
@@ -312,74 +320,6 @@ describe("outline widget", function() {
 		expect(w.units.every(function(m) { return m.domNodes.length > 0; })).toBe(true);
 	});
 
-	describe("toolbar button", function() {
-
-		var BUTTON = "$:/plugins/rimir/outline/ui/toolbar-button";
-
-		function renderButton(wiki, title) {
-			return render(wiki, "<$let currentTiddler=\"" + title + "\" tv-config-toolbar-icons=\"yes\"><$transclude $tiddler=\"" + BUTTON + "\"/></$let>");
-		}
-
-		function buttonWiki(tiddlers) {
-			return makeWiki([
-				$tw.wiki.getTiddler(BUTTON).fields,
-				$tw.wiki.getTiddler("$:/plugins/rimir/outline/ui/toolbar-icon").fields
-			].concat(tiddlers));
-		}
-
-		it("shows for wikitext non-drafts and toggles the state", function() {
-			var wiki = buttonWiki([{title: "A", text: "x"}]),
-				r = renderButton(wiki, "A"),
-				button = findWidget(r.root, "button");
-			expect(button).not.toBe(null);
-			expect(button.getAttribute("tooltip")).toContain("outline mode");
-			button.invokeActions(button, {});
-			expect(wiki.getTiddlerText("$:/state/rimir/outline/on/A")).toBe("yes");
-			r.root.refresh({"$:/state/rimir/outline/on/A": {modified: true}});
-			button = findWidget(r.root, "button");
-			expect(button.getAttribute("class")).toContain("tc-selected");
-			button.invokeActions(button, {});
-			expect(wiki.getTiddlerText("$:/state/rimir/outline/on/A")).toBe("no");
-		});
-
-		it("switching outline mode off discards a kept edit buffer, switching on does not", function() {
-			var BUF = "$:/temp/rimir/outline/edit/A",
-				wiki = buttonWiki([{title: "A", text: "x"}, {title: BUF, text: "typed"}]),
-				r = renderButton(wiki, "A"),
-				button = findWidget(r.root, "button");
-			button.invokeActions(button, {});
-			expect(wiki.getTiddlerText("$:/state/rimir/outline/on/A")).toBe("yes");
-			expect(wiki.getTiddlerText(BUF)).toBe("typed");
-			r.root.refresh({"$:/state/rimir/outline/on/A": {modified: true}});
-			button = findWidget(r.root, "button");
-			button.invokeActions(button, {});
-			expect(wiki.getTiddlerText("$:/state/rimir/outline/on/A")).toBe("no");
-			expect(wiki.tiddlerExists(BUF)).toBe(false);
-		});
-
-		it("is hidden for other types and drafts", function() {
-			var wiki = buttonWiki([
-				{title: "M", text: "x", type: "text/x-markdown"},
-				{title: "D", text: "x", "draft.of": "A"}
-			]);
-			expect(findWidget(renderButton(wiki, "M").root, "button")).toBe(null);
-			expect(findWidget(renderButton(wiki, "D").root, "button")).toBe(null);
-		});
-
-		it("is hidden for system tiddlers and code-body or hide-body tiddlers", function() {
-			var wiki = buttonWiki([
-				{title: "$:/S", text: "x"},
-				{title: "C", text: "x", "code-body": "yes"},
-				{title: "H", text: "x", "hide-body": "yes"},
-				{title: "N", text: "x", "code-body": "no", "hide-body": "no"}
-			]);
-			expect(findWidget(renderButton(wiki, "$:/S").root, "button")).toBe(null);
-			expect(findWidget(renderButton(wiki, "C").root, "button")).toBe(null);
-			expect(findWidget(renderButton(wiki, "H").root, "button")).toBe(null);
-			expect(findWidget(renderButton(wiki, "N").root, "button")).not.toBe(null);
-		});
-	});
-
 	describe("body filter", function() {
 
 		function bodyFor(wiki, title) {
@@ -391,11 +331,15 @@ describe("outline widget", function() {
 
 		function cascadeWiki(tiddlers) {
 			var filter = $tw.wiki.getTiddler(BODY_FILTER);
-			return makeWiki([filter.fields, {
+			// Ordered like the real cascade: the outline's first, other filters, the core default
+			return makeWiki([{
+				title: "$:/tags/ViewTemplateBodyFilter",
+				list: "[[" + BODY_FILTER + "]] [[Other Body Filter]] $:/config/ViewTemplateBodyFilters/default"
+			}, {
 				title: "Other Body Filter",
 				tags: "$:/tags/ViewTemplateBodyFilter",
 				text: "[tag[Special]then[Special Body]]"
-			}].concat(tiddlers));
+			}, filter.fields, $tw.wiki.getTiddler("$:/config/ViewTemplateBodyFilters/default").fields].concat(tiddlers));
 		}
 
 		it("is first in the cascade", function() {
@@ -403,30 +347,39 @@ describe("outline widget", function() {
 			expect(list[0]).toBe(BODY_FILTER);
 		});
 
-		it("routes wikitext tiddlers in outline mode", function() {
+		it("a filter that yields an empty title for every tiddler (else[]) does not block it", function() {
+			var wiki = cascadeWiki([{title: "A", text: "x"}, {
+				title: "Blank Body Filter",
+				tags: "$:/tags/ViewTemplateBodyFilter",
+				text: "[{$:/state/none}get[text]match[x]then[Never]else[]]"
+			}]);
+			wiki.addTiddler({title: "$:/tags/ViewTemplateBodyFilter",
+				list: "[[" + BODY_FILTER + "]] [[Other Body Filter]] [[Blank Body Filter]] $:/config/ViewTemplateBodyFilters/default"});
+			expect(bodyFor(wiki, "A")).toBe(BODY);
+		});
+
+		it("routes every wikitext tiddler, other body filters first", function() {
 			var wiki = cascadeWiki([
 				{title: "A", text: "x"},
 				{title: "B", text: "x", type: "text/vnd.tiddlywiki"},
 				{title: "C", text: "x", type: "text/x-markdown"},
 				{title: "D", text: "x", "draft.of": "A"},
 				{title: "E", text: "x", tags: "Special"},
-				{title: "F", text: "x", tags: "Special"},
-				{title: "G", text: "x"},
-				{title: "$:/state/rimir/outline/on/A", text: "yes"},
-				{title: "$:/state/rimir/outline/on/B", text: "yes"},
-				{title: "$:/state/rimir/outline/on/C", text: "yes"},
-				{title: "$:/state/rimir/outline/on/D", text: "yes"},
-				{title: "$:/state/rimir/outline/on/E", text: "yes"},
-				{title: "$:/state/rimir/outline/on/G", text: "no"}
+				{title: "O", text: "x", outline: "no"}
 			]);
 			expect(bodyFor(wiki, "A")).toBe(BODY);
 			expect(bodyFor(wiki, "B")).toBe(BODY);
 			expect(bodyFor(wiki, "C")).toBe("$:/core/ui/ViewTemplate/body/default");
 			expect(bodyFor(wiki, "D")).toBe("$:/core/ui/ViewTemplate/body/default");
-			expect(bodyFor(wiki, "E")).toBe(BODY);
-			// Without outline state, other cascade entries work as before
-			expect(bodyFor(wiki, "F")).toBe("Special Body");
-			expect(bodyFor(wiki, "G")).toBe("$:/core/ui/ViewTemplate/body/default");
+			expect(bodyFor(wiki, "E")).toBe("Special Body");
+			expect(bodyFor(wiki, "O")).toBe("$:/core/ui/ViewTemplate/body/default");
+		});
+
+		it("routes nothing when outline is not enabled", function() {
+			var wiki = cascadeWiki([{title: "A", text: "x"}, {title: "$:/config/rimir/outline/enabled", text: "no"}]);
+			expect(bodyFor(wiki, "A")).toBe("$:/core/ui/ViewTemplate/body/default");
+			wiki.addTiddler({title: "$:/config/rimir/outline/enabled", text: "yes"});
+			expect(bodyFor(wiki, "A")).toBe(BODY);
 		});
 
 		it("leaves system, code-body and hide-body tiddlers alone", function() {
@@ -434,11 +387,7 @@ describe("outline widget", function() {
 				{title: "$:/S", text: "x"},
 				{title: "C", text: "x", "code-body": "yes"},
 				{title: "H", text: "x", "hide-body": "yes"},
-				{title: "N", text: "x", "code-body": "no"},
-				{title: "$:/state/rimir/outline/on/$:/S", text: "yes"},
-				{title: "$:/state/rimir/outline/on/C", text: "yes"},
-				{title: "$:/state/rimir/outline/on/H", text: "yes"},
-				{title: "$:/state/rimir/outline/on/N", text: "yes"}
+				{title: "N", text: "x", "code-body": "no"}
 			]);
 			expect(bodyFor(wiki, "$:/S")).not.toBe(BODY);
 			expect(bodyFor(wiki, "C")).not.toBe(BODY);
@@ -451,7 +400,149 @@ describe("outline widget", function() {
 				r = render(wiki, "<$let currentTiddler=\"T\"><$transclude $tiddler=\"" + BODY + "\" $mode=\"block\"/></$let>"),
 				w = findWidget(r.root, "outline");
 			expect(w).not.toBe(null);
+			// Idle until woken
+			expect(w.units.length).toBe(0);
+			w.wake();
 			expect(w.units.length).toBe(2);
 		});
+	});
+
+	describe("idle and wake", function() {
+
+		var SEL = "$:/temp/rimir/outline/selection/T";
+
+		function stamped(r) {
+			return elements(r.container).filter(function(el) { return el.getAttribute("data-ol-id") !== null && el.getAttribute("data-ol-id") !== undefined; });
+		}
+		function click(r, node, mods) {
+			var ev = {target: node, ctrlKey: !!(mods && mods.ctrl), metaKey: !!(mods && mods.meta), prevented: false,
+				preventDefault: function() { ev.prevented = true; }, stopPropagation: function() {}};
+			r.widget.handleClick(ev);
+			return ev;
+		}
+		// The body's paragraphs (not the one the test markup wraps around the outline)
+		function paras(r) {
+			return elements(r.widget.domNode).filter(function(el) { return el.tag === "p"; });
+		}
+
+		it("an idle outline maps nothing", function() {
+			var r = renderIdle(makeWiki([{title: "T", text: "a\n\nb"}]), "T");
+			expect(r.widget.awake).toBe(false);
+			expect(r.widget.units.length).toBe(0);
+			expect(stamped(r).length).toBe(0);
+			expect(r.widget.domNode.getAttribute("tabindex")).toBeFalsy();
+		});
+
+		it("Ctrl-Click (Cmd-Click) wakes and selects the clicked unit", function() {
+			var r = renderIdle(makeWiki([{title: "T", text: "a\n\nb"}]), "T");
+			var ev = click(r, paras(r)[1], {ctrl: true});
+			expect(ev.prevented).toBe(true);
+			expect(r.widget.awake).toBe(true);
+			expect(r.widget.selectedId).toBe(1);
+			expect(r.widget.domNode.getAttribute("tabindex")).toBe("0");
+			expect(r.widget.domNode.className).toContain("rr-ol-awake");
+			expect(stamped(r).length).toBe(2);
+			var r2 = renderIdle(makeWiki([{title: "T", text: "a\n\nb"}]), "T");
+			click(r2, paras(r2)[0], {meta: true});
+			expect(r2.widget.selectedId).toBe(0);
+		});
+
+		it("a plain click and a double-click on an idle outline do nothing", function() {
+			var wiki = makeWiki([{title: "T", text: "a\n\nb"}]),
+				r = renderIdle(wiki, "T");
+			click(r, paras(r)[0]);
+			r.widget.handleDblClick({target: paras(r)[0], preventDefault: function() {}});
+			expect(r.widget.awake).toBe(false);
+			expect(r.widget.editor).toBe(null);
+			expect(wiki.tiddlerExists(SEL)).toBe(false);
+		});
+
+		it("Ctrl-Click on a link does not wake", function() {
+			var r = renderIdle(makeWiki([{title: "T", text: "a [[X]]"}]), "T"),
+				link = elements(r.container).filter(function(el) { return el.tag === "a"; })[0];
+			var ev = click(r, link, {ctrl: true});
+			expect(ev.prevented).toBe(false);
+			expect(r.widget.awake).toBe(false);
+		});
+
+		it("a new widget wakes itself when the selection or edit buffer tiddler exists", function() {
+			var r = renderIdle(makeWiki([{title: "T", text: "a\n\nb"}, {title: SEL, start: "3", index: "1", kind: "block"}]), "T");
+			expect(r.widget.awake).toBe(true);
+			expect(r.widget.selectedId).toBe(1);
+			var r2 = renderIdle(makeWiki([{title: "T", text: "a"}, {title: "$:/temp/rimir/outline/edit/T", text: "x"}]), "T");
+			expect(r2.widget.awake).toBe(true);
+		});
+
+		it("an idle view wakes when another view of the tiddler selects or edits", function() {
+			var wiki = makeWiki([{title: "T", text: "a\n\nb"}]),
+				r = renderIdle(wiki, "T");
+			wiki.addTiddler({title: SEL, start: "3", index: "1", kind: "block"});
+			r.root.refresh({"$:/temp/rimir/outline/selection/T": {modified: true}});
+			expect(r.widget.awake).toBe(true);
+			expect(r.widget.selectedId).toBe(1);
+		});
+
+		it("sleep is refused while editing", function() {
+			var r = renderOutline(makeWiki([{title: "T", text: "a"}]), "T");
+			r.widget.select(0);
+			r.widget.startEdit(0);
+			expect(r.widget.sleep()).toBe(false);
+			expect(r.widget.awake).toBe(true);
+		});
+
+		it("an idle widget does no work on a text change", function() {
+			var wiki = makeWiki([{title: "T", text: "a"}]),
+				r = renderIdle(wiki, "T");
+			spyOn(r.widget, "mapUnits").and.callThrough();
+			wiki.addTiddler({title: "T", text: "a\n\nb"});
+			r.root.refresh({T: {modified: true}});
+			expect(r.widget.mapUnits).not.toHaveBeenCalled();
+			expect(stamped(r).length).toBe(0);
+		});
+	});
+
+	describe("leaving the story", function() {
+
+		var TEMPS = ["$:/temp/rimir/outline/selection/T", "$:/temp/rimir/outline/edit/T", "$:/temp/rimir/outline/help/T"];
+
+		function inStory(list) {
+			var wiki = makeWiki([{title: "T", text: "a"}, {title: "SL", list: list}].concat(TEMPS.map(function(t) { return {title: t, text: "x"}; })));
+			var r = render(wiki, "<$let tv-story-list=\"SL\"><$outline tiddler=\"T\"><$transclude $tiddler=\"T\" $mode=\"block\"/></$outline></$let>");
+			r.wiki = wiki;
+			r.widget = findWidget(r.root, "outline");
+			return r;
+		}
+
+		it("a tiddler no longer in the story forgets its selection, edit and key overview (any way of closing)", function() {
+			var r = inStory("Other");
+			r.widget.destroy({removeDOMNodes: true});
+			TEMPS.forEach(function(t) { expect(r.wiki.tiddlerExists(t)).toBe(false); });
+		});
+
+		it("a re-render while the tiddler stays in the story keeps them", function() {
+			var r = inStory("T Other");
+			r.widget.destroy({removeDOMNodes: true});
+			TEMPS.forEach(function(t) { expect(r.wiki.tiddlerExists(t)).toBe(true); });
+		});
+	});
+
+	it("a mousedown in another view of the same tiddler is not outside", function() {
+		var wiki = makeWiki([{title: "T", text: "a"}, {title: "U", text: "u"}]),
+			r = render(wiki, "<div class=\"rr-ol-frame\"><div class=\"bar\">?</div>\n\n<$outline tiddler=\"T\"><$transclude $tiddler=\"T\" $mode=\"block\"/></$outline></div>\n\n" +
+				"<div class=\"rr-ol-frame\"><div class=\"bar\">?</div>\n\n<$outline tiddler=\"T\"><$transclude $tiddler=\"T\" $mode=\"block\"/></$outline></div>\n\n" +
+				"<$outline tiddler=\"U\"><$transclude $tiddler=\"U\" $mode=\"block\"/></$outline>"),
+			views = [];
+		(function collect(w) {
+			if(w.parseTreeNode && w.parseTreeNode.type === "outline") { views.push(w); }
+			(w.children || []).forEach(collect);
+		})(r.root);
+		var a = views[0], b = views[1], u = views[2];
+		function first(el, tag) { return elements(el).filter(function(x) { return x.tag === tag; })[0]; }
+		expect(b.ownsTarget(first(a.domNode, "p"))).toBe(true);
+		// The frame around the other view (its ? button)
+		expect(b.ownsTarget(first(a.parentDomNode, "div"))).toBe(true);
+		expect(b.ownsTarget(first(b.domNode, "p"))).toBe(true);
+		expect(b.ownsTarget(first(u.domNode, "p"))).toBe(false);
+		expect(b.ownsTarget(r.container)).toBe(false);
 	});
 });

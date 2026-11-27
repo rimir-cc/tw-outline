@@ -18,9 +18,17 @@ type: text/vnd.tiddlywiki
 
 Wikitext tiddlers (`text/vnd.tiddlywiki`) that are not drafts, system tiddlers, `code-body` or `hide-body` tiddlers. v1 is wikitext only; Markdown comes later through a second format adapter.
 
-!! Where does the button show?
+!! How do I switch it on?
 
-In the view toolbar, per tiddler. State is `$:/state/rimir/outline/on/<title>`.
+You don't: Ctrl-Click (Cmd-Click on Mac) on a block wakes the outline of that tiddler. Escape with nothing selected, a click outside the tiddler or closing it puts it back to sleep. Leave a single tiddler out with the field `outline: no`, or all of them with the //Enabled// setting.
+
+!! Does it slow down a story with many tiddlers?
+
+No. An idle tiddler has one extra widget and a few event listeners; it parses nothing, stamps nothing and does no work when its text changes. Waking needs no re-render.
+
+!! A plugin shows a tiddler with its own body template: no outline?
+
+Right. The outline's body filter only takes a tiddler whose body would otherwise be the core default, so any other body template wins and that tiddler gets no outline.
 
 !! How do I put a heading above a list or paragraph?
 
@@ -78,7 +86,7 @@ Yes. They save your text, indent, promote or move the unit with its subtree, and
 
 !! My CSS for `.tc-tiddler-body > p` stopped working
 
-While outline mode is on, the body is wrapped in `div.rr-ol`, so child selectors of `.tc-tiddler-body` no longer match. Use a descendant selector (`.tc-tiddler-body p`) or also match `.tc-tiddler-body > .rr-ol > p`.
+The body of every eligible tiddler is wrapped in `div.rr-ol` (idle or awake), so child selectors of `.tc-tiddler-body` no longer match. Use a descendant selector (`.tc-tiddler-body p`) or also match `.tc-tiddler-body > .rr-ol > p`.
 
 !! Do `AI:` lines of llm-inline fire?
 

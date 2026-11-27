@@ -50,7 +50,8 @@ var ACTIONS = [
 	{name: "outline-down-deep", run: function(w) { return w.step(1, true); }},
 	{name: "outline-parent", run: function(w) { return w.stepTree(-1); }},
 	{name: "outline-child", run: function(w) { return w.stepTree(1); }},
-	{name: "outline-clear", run: function(w) { return w.clearSelection(); }},
+	// Escape: clears the selection; with nothing selected the outline goes idle
+	{name: "outline-clear", run: function(w) { return w.clearSelection() || w.sleep(); }},
 	{name: "outline-open", run: function(w) { return w.openTransclusion(); }},
 	{name: "outline-edit", run: function(w) { return w.editSelected(); }},
 	{name: "outline-add", run: function(w) { return w.addBelow(); }},
@@ -422,8 +423,8 @@ methods.isReadOnly = function() {
 /* ---------- events ---------- */
 
 methods.handleKeydown = function(event) {
-	// Consumed elsewhere (AutoComplete popups listen in the capture phase), or from an element inside
-	if(event.defaultPrevented || event.target !== this.domNode) {
+	// Idle, consumed elsewhere (AutoComplete popups listen in the capture phase), or from an element inside
+	if(!this.awake || event.defaultPrevented || event.target !== this.domNode) {
 		return;
 	}
 	// An open block menu takes its keys; any other key closes it and acts as usual
@@ -485,12 +486,36 @@ methods.keyMatches = function(event, name) {
 	return !!km && km.checkKeyDescriptors(event, km.parseKeyDescriptors("((" + name + "))", {wiki: this.wiki}));
 };
 
+// True when `node` is in a link or button (below the outline): its click and double-click are its own
+function inControl(node, root) {
+	for(var m = node; m && m !== root; m = m.parentNode) {
+		if(m.tagName && /^(A|BUTTON)$/i.test(m.tagName)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 /*
-Click on a transclusion marker opens its target. Click on a stamped element selects its unit and focuses
-the container. Clicks inside the editor host are left to the editor.
+Idle: only Ctrl-Click (Cmd-Click) on the outline does something, outside links and buttons: it wakes the outline and
+selects the clicked unit. Awake: click on a transclusion marker opens its target. Click on a stamped element selects
+its unit and focuses the container. Clicks inside the editor host are left to the editor.
 */
 methods.handleClick = function(event) {
 	var node = event.target;
+	if(!this.awake) {
+		if(!(event.ctrlKey || event.metaKey) || inControl(node, this.domNode)) {
+			return;
+		}
+		event.preventDefault();
+		this.wake();
+		var woken = this.unitIdAt(node);
+		if(woken !== -1) {
+			this.select(woken);
+		}
+		focus(this.domNode);
+		return;
+	}
 	this.closeMenu();
 	if(this.editor && this.editor.host && isInside(node, this.editor.host)) {
 		return;
@@ -525,16 +550,11 @@ saved first. Not inside the editor, not on links, buttons or inputs; the word th
 */
 methods.handleDblClick = function(event) {
 	var node = event.target;
-	if(this.editor && this.editor.host && isInside(node, this.editor.host)) {
+	if(!this.awake || (this.editor && this.editor.host && isInside(node, this.editor.host))) {
 		return;
 	}
-	if(isEditable(node)) {
+	if(isEditable(node) || inControl(node, this.domNode)) {
 		return;
-	}
-	for(var m = node; m && m !== this.domNode; m = m.parentNode) {
-		if(m.tagName && /^(A|BUTTON)$/.test(m.tagName)) {
-			return;
-		}
 	}
 	var id = this.unitIdAt(node),
 		view = this.document.defaultView;
@@ -552,6 +572,8 @@ methods.handleDblClick = function(event) {
 		this.startEdit(id);
 	}
 };
+
+exports.SELECTION_PREFIX = SELECTION_PREFIX;
 
 exports.install = function(proto) {
 	$tw.utils.each(methods, function(fn, name) {

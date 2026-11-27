@@ -14,7 +14,7 @@ outline-edit: Outline: edit the selected unit in place
 outline-menu: Outline: block menu - insert a new block after or before the selected unit, or turn it into another type (in the editor: turn the edited unit into another type)
 outline-open: Outline: open the transcluded tiddler of the selected unit in outline mode
 outline-add: Outline: edit a new empty unit below the selected one (a list item: an item on its level; anything else: a paragraph)
-outline-clear: Outline: clear the selection
+outline-clear: Outline: clear the selection; with nothing selected, put the outline to sleep
 outline-save: Outline editor: save the edit
 outline-continue: Outline editor: save and start a new unit below (list items, headings, paragraphs); in the middle of a list item: split it at the caret; at the start of a filled list item or paragraph: a new empty one above
 outline-newline: Outline editor: insert a line break

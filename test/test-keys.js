@@ -48,6 +48,7 @@ describe("outline selection and keys", function() {
 			container = $tw.fakeDocument.createElement("div");
 		root.render(container, null);
 		var r = {root: root, widget: findWidget(root, "outline"), wiki: wiki, title: title};
+		r.widget.wake();
 		// Re-render like the browser does after a change event
 		r.refresh = function() {
 			var changes = {};
@@ -449,9 +450,21 @@ describe("outline selection and keys", function() {
 		expect(ev.prevented).toBe(true);
 		expect(r.widget.selectedId).toBe(-1);
 		expect(r.wiki.tiddlerExists(SEL + "T")).toBe(false);
-		// Without a selection Escape and Tab pass through
+		// Without a selection Escape puts the outline to sleep; idle, keys pass through
+		expect(key(r, KEYS.escape).prevented).toBe(true);
+		expect(r.widget.awake).toBe(false);
+		expect(r.widget.domNode.getAttribute("tabindex")).toBeFalsy();
+		expect(r.widget.domNode.className).not.toContain("rr-ol-awake");
+		expect(r.widget.units.length).toBe(0);
 		expect(key(r, KEYS.escape).prevented).toBe(false);
 		expect(key(r, KEYS.tab).prevented).toBe(false);
+	});
+
+	it("an idle outline ignores keys", function() {
+		var r = renderOutline(makeWiki([{title: "T", text: "* a\n* b"}]), "T");
+		r.widget.sleep();
+		expect(key(r, KEYS.enter).prevented).toBe(false);
+		expect(r.widget.editor).toBe(null);
 	});
 
 	it("selection follows moved unit", function() {

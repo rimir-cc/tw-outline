@@ -42,7 +42,7 @@ methods.hasTextSelection = function() {
 // Whether a clipboard event is the outline's: the outline itself has the focus (not its editor; the event's target is
 // where the caret of the last click is), a unit selected (paste: or no units at all)
 methods.ownsClipboardEvent = function(event, paste) {
-	return this.document.activeElement === this.domNode && !!event.clipboardData && !this.hasTextSelection() &&
+	return this.awake && this.document.activeElement === this.domNode && !!event.clipboardData && !this.hasTextSelection() &&
 		(this.selectedId !== -1 || (paste && !this.hasSelectable()));
 };
 

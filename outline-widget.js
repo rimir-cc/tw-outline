@@ -32,7 +32,8 @@ var Widget = require("$:/core/modules/widgets/widget.js").widget,
 	clipboard = require("$:/plugins/rimir/outline/outline-clipboard.js"),
 	dom = require("$:/plugins/rimir/outline/dom-utils.js");
 
-var MARKER_TIDDLER = "$:/plugins/rimir/outline/ui/transclusion-marker",
+var AWAKE_CLASS = "rr-ol-awake",
+	MARKER_TIDDLER = "$:/plugins/rimir/outline/ui/transclusion-marker",
 	EMPTY_HINT = "$:/plugins/rimir/outline/language/block/empty-hint",
 	LIST_TAGS = {ul: true, ol: true, dl: true, blockquote: true},
 	// Kinds whose widgets may contain further units
@@ -62,7 +63,7 @@ OutlineWidget.prototype.render = function(parent, nextSibling) {
 	this.execute();
 	var domNode = this.document.createElement("div");
 	domNode.className = "rr-ol";
-	domNode.setAttribute("tabindex", "0");
+	domNode.setAttribute("data-ol-tiddler", this.tiddlerTitle);
 	var self = this;
 	domNode.addEventListener("keydown", function(event) { self.handleKeydown(event); }, false);
 	domNode.addEventListener("click", function(event) { self.handleClick(event); }, false);
@@ -80,11 +81,114 @@ OutlineWidget.prototype.render = function(parent, nextSibling) {
 	this.renderChildren(domNode, null);
 	this.domNodes.push(domNode);
 	this.domNode = domNode;
+	// Idle until woken (Ctrl-Click), unless this tiddler is being worked on (a re-render, another view)
+	if(this.wakesItself()) {
+		this.wake();
+	}
+};
+
+// True when the tiddler has a selection or an open edit (their temp tiddlers): a new widget of it starts awake
+OutlineWidget.prototype.wakesItself = function() {
+	return this.wiki.tiddlerExists(this.selectionTitle()) || this.wiki.tiddlerExists(this.bufferTitle());
+};
+
+/*
+Wake the outline: map and stamp the units, take keyboard focus (tabindex), watch the layout and mousedowns outside
+the tiddler (they put it to sleep). Returns true when it woke, false when it already was awake.
+*/
+OutlineWidget.prototype.wake = function() {
+	if(this.awake) {
+		return false;
+	}
+	var self = this,
+		domNode = this.domNode,
+		view = this.document.defaultView;
+	this.awake = true;
+	dom.setClass(domNode, AWAKE_CLASS, true);
+	domNode.setAttribute("tabindex", "0");
 	this.mapUnits();
 	// Layout changes (window width, images, the editor) move the item selection frame
-	if($tw.browser && this.document.defaultView && this.document.defaultView.ResizeObserver) {
-		this.resizeObserver = new this.document.defaultView.ResizeObserver(function() { self.drawSelectionBox(); });
+	if($tw.browser && view && view.ResizeObserver) {
+		this.resizeObserver = new view.ResizeObserver(function() { self.drawSelectionBox(); });
 		this.resizeObserver.observe(domNode);
+	}
+	if($tw.browser && this.document.addEventListener) {
+		this.outsideListener = function(event) {
+			if(!self.ownsTarget(event.target)) {
+				self.sleep();
+			}
+		};
+		this.document.addEventListener("mousedown", this.outsideListener, true);
+	}
+	return true;
+};
+
+/*
+Back to idle: no stamps, markers, selection, menu, key overview or empty hint; no focus stop. Refused (false) while
+an editor is open.
+*/
+OutlineWidget.prototype.sleep = function() {
+	if(!this.awake || this.editor) {
+		return false;
+	}
+	this.closeMenu();
+	this.stopWatching();
+	this.clearStamps();
+	this.showSelection(-1);
+	this.units = [];
+	this.awake = false;
+	this.showEmptyHint();
+	this.wiki.deleteTiddler(this.selectionTitle());
+	this.wiki.deleteTiddler(this.helpTitle());
+	dom.setClass(this.domNode, AWAKE_CLASS, false);
+	this.domNode.removeAttribute("tabindex");
+	return true;
+};
+
+/*
+True when `node` is in a view of this outline's tiddler: in an outline of the same tiddler (this one or another view
+of it, which shares the selection) or in the frame around one (its ? button and key overview).
+*/
+OutlineWidget.prototype.ownsTarget = function(node) {
+	var title = this.tiddlerTitle;
+	for(var n = node; n && n.getAttribute; n = n.parentNode) {
+		var classes = " " + (n.getAttribute("class") || "") + " ";
+		if(classes.indexOf(" rr-ol ") !== -1) {
+			return n.getAttribute("data-ol-tiddler") === title;
+		}
+		if(classes.indexOf(" rr-ol-frame ") !== -1) {
+			var own = firstOutline(n);
+			return !!own && own.getAttribute("data-ol-tiddler") === title;
+		}
+	}
+	return false;
+};
+
+// The first .rr-ol element below `node` (document order), or null
+function firstOutline(node) {
+	var children = node.children || [];
+	for(var i = 0; i < children.length; i++) {
+		var child = children[i];
+		if(child.getAttribute && (" " + (child.getAttribute("class") || "") + " ").indexOf(" rr-ol ") !== -1) {
+			return child;
+		}
+		var found = firstOutline(child);
+		if(found) {
+			return found;
+		}
+	}
+	return null;
+}
+
+// Stop the layout observer and the outside mousedown listener of an awake outline
+OutlineWidget.prototype.stopWatching = function() {
+	if(this.resizeObserver) {
+		this.resizeObserver.disconnect();
+		this.resizeObserver = null;
+	}
+	if(this.outsideListener) {
+		this.document.removeEventListener("mousedown", this.outsideListener, true);
+		this.outsideListener = null;
 	}
 };
 
@@ -103,6 +207,9 @@ OutlineWidget.prototype.execute = function() {
 	this.lastWritten = null;
 	this.undoGroupState = null;
 	this.emptyHint = null;
+	this.awake = false;
+	this.resizeObserver = null;
+	this.outsideListener = null;
 	this.makeChildWidgets();
 };
 
@@ -116,6 +223,13 @@ OutlineWidget.prototype.refresh = function(changedTiddlers) {
 		this.markerHtml = null;
 	}
 	var refreshed = this.refreshChildren(changedTiddlers);
+	if(!this.awake) {
+		// Another view of this tiddler started working on it (selection, edit): this one wakes too
+		if((changedTiddlers[this.selectionTitle()] || changedTiddlers[this.bufferTitle()]) && this.wakesItself()) {
+			this.wake();
+		}
+		return refreshed;
+	}
 	if(this.editor && this.editor.widget) {
 		this.editor.widget.refresh(changedTiddlers);
 	}
@@ -132,13 +246,31 @@ Remove the editor (it is not part of the children). A changed buffer is kept and
 this tiddler (an ancestor re-render destroys this widget); an unchanged one is discarded (releaseEditor).
 */
 OutlineWidget.prototype.destroy = function(options) {
-	if(this.resizeObserver) {
-		this.resizeObserver.disconnect();
-		this.resizeObserver = null;
-	}
+	var leaving = this.leftStory();
+	this.stopWatching();
 	this.closeMenu();
-	this.releaseEditor();
+	if(leaving) {
+		// Closed (any way: close, close all, close others, a changed story list): forget its outline state, also a
+		// changed edit; a reopened tiddler starts idle
+		if(this.editor) {
+			this.closeEditor(true);
+		}
+		var wiki = this.wiki;
+		$tw.utils.each([this.selectionTitle(), this.bufferTitle(), this.helpTitle()], function(title) {
+			if(wiki.tiddlerExists(title)) {
+				wiki.deleteTiddler(title);
+			}
+		});
+	} else {
+		this.releaseEditor();
+	}
 	Widget.prototype.destroy.call(this, options);
+};
+
+// True when this outline is in a story river (tv-story-list) whose list no longer has its tiddler
+OutlineWidget.prototype.leftStory = function() {
+	var story = this.getVariable("tv-story-list");
+	return !!story && this.wiki.getTiddlerList(story).indexOf(this.tiddlerTitle) === -1;
 };
 
 /*
@@ -153,7 +285,9 @@ OutlineWidget.prototype.rebuild = function() {
 	});
 	this.makeChildWidgets();
 	this.renderChildren(this.domNode, null);
-	this.mapUnits();
+	if(this.awake) {
+		this.mapUnits();
+	}
 };
 
 /*
@@ -185,7 +319,7 @@ A tiddler without units (empty, or only whitespace and comments) has nothing to 
 a first paragraph and Alt-Enter offers the block types. Not part of the body's widget tree; hidden while editing.
 */
 OutlineWidget.prototype.showEmptyHint = function() {
-	var show = !this.hasSelectable() && !this.isReadOnly() && !!this.getAdapter();
+	var show = this.awake && !this.hasSelectable() && !this.isReadOnly() && !!this.getAdapter();
 	if(show && !this.emptyHint) {
 		this.emptyHint = this.document.createElement("div");
 		this.emptyHint.className = "rr-ol-empty";

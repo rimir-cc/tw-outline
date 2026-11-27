@@ -44,10 +44,10 @@ gone it opens with the conflict notice, so the text stays visible. Escape and th
 var formats = require("$:/plugins/rimir/outline/formats.js"),
 	utils = require("$:/plugins/rimir/outline/text-utils.js"),
 	model = require("$:/plugins/rimir/outline/model.js"),
-	dom = require("$:/plugins/rimir/outline/dom-utils.js");
+	dom = require("$:/plugins/rimir/outline/dom-utils.js"),
+	SELECTION_PREFIX = require("$:/plugins/rimir/outline/outline-keys.js").SELECTION_PREFIX;
 
 var BUFFER_PREFIX = "$:/temp/rimir/outline/edit/",
-	STATE_PREFIX = "$:/state/rimir/outline/on/",
 	EDITOR_TIDDLER = "$:/plugins/rimir/outline/ui/editor",
 	HOST_CLASS = "rr-ol-editor-host",
 	// Edited unit hidden (blocks) / only its own content hidden (items: sub-items stay visible)
@@ -1179,12 +1179,15 @@ methods.editSelected = function() {
 	return true;
 };
 
-// Set outline mode on for `title` and open it in the story
+// Open `title` in the story, its outline awake: its first unit selected (unless it already has a selection)
 methods.openTarget = function(title) {
 	if(!title) {
 		return false;
 	}
-	this.wiki.addTiddler(new $tw.Tiddler({title: STATE_PREFIX + title, text: "yes"}));
+	var selection = SELECTION_PREFIX + title;
+	if(!this.wiki.tiddlerExists(selection)) {
+		this.wiki.addTiddler(new $tw.Tiddler({title: selection, start: "0", index: "0", kind: ""}));
+	}
 	this.dispatchEvent({
 		type: "tm-navigate",
 		navigateTo: title,

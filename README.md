@@ -4,7 +4,7 @@ Work on an ordinary tiddler like on a Streams outline: select a block, edit it i
 
 ## Features
 
-- **Toggle per tiddler** - an *outline* button in the view toolbar. Off means the normal view.
+- **Always there, idle until used** - no button, no switch: Ctrl-Click (Cmd-Click on Mac) on a block of any wikitext tiddler wakes its outline. Until then the tiddler behaves exactly as without the plugin and costs as good as nothing. Escape with nothing selected, a click outside the tiddler or closing it puts it back to sleep.
 - **Same rendering** - the tiddler renders exactly as usual; outline mode only adds data attributes, a selection frame and key handling.
 - **Units** - list items, lists, headings (with sections), paragraphs, code blocks, tables, opened HTML containers, transclusion lines, and widgets or macro calls (one opaque unit each).
 - **Type badges** - a small, faint label next to every unit shows what it is (paragraph, h2, code-block, bullet, ...), also on the editor field; they take no space. Settings: all (default), headings only, off.
@@ -29,7 +29,7 @@ Work on an ordinary tiddler like on a Streams outline: select a block, edit it i
 ## Quick Start
 
 1. Install the plugin and restart the server.
-2. Open a wikitext tiddler and press *outline* in its view toolbar.
+2. Open a wikitext tiddler and Ctrl-Click (Cmd-Click on Mac) a block in it.
 3. Click a block; Up/Down select, Alt-Down moves, Tab indents.
 4. Enter edits, Ctrl-Enter saves.
 5. `?` shows all keys.

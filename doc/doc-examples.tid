@@ -34,7 +34,7 @@ Select a list item, Enter, type, press Enter: the item is saved and a new item w
 
 !! Transclusions
 
-A line `{{Other note}}` shows a small marker. Select it and press Enter: //Other note// opens in the story with outline mode on.
+A line `{{Other note}}` shows a small marker. Select it and press Enter: //Other note// opens in the story with its outline awake, its first block selected.
 
 </$fill>
 </$transclude>

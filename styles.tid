@@ -144,7 +144,7 @@ ul > li.rr-ol-editor-host[data-ol-type="numbered"] {
 	}
 }
 
-/* Hint in a tiddler without units (Enter / Alt-Enter start the first block) */
+/* Hint in an awake tiddler without units (Enter / Alt-Enter start the first block) */
 .rr-ol-empty {
 	padding: 0.4em 0;
 	color: <<colour muted-foreground>>;
@@ -207,6 +207,11 @@ ul > li.rr-ol-editor-host[data-ol-type="numbered"] {
 /* Key overview: a small ? at the top right of the outline, the overview floats below it */
 .rr-ol-frame {
 	position: relative;
+}
+
+/* Only while the outline is awake (Ctrl-Click): an idle body looks like without the plugin */
+.rr-ol-frame:not(:has(.rr-ol-awake)) .rr-ol-help-bar {
+	display: none;
 }
 
 .rr-ol-help-bar {
@@ -302,11 +307,11 @@ td.rr-ol-keys-key {
    field moves or grows: they sit in a column reserved on the right of the outline (padding), each at the top of its
    unit; a whole list or container a line above it (its first item has the badge beside it); code blocks inside
    their top right corner (they clip overflow). */
-.rr-ol-badges-all .rr-ol {
+.rr-ol-badges-all .rr-ol.rr-ol-awake {
 	padding-right: 6.5em;
 }
 
-.rr-ol-badges-headings .rr-ol {
+.rr-ol-badges-headings .rr-ol.rr-ol-awake {
 	padding-right: 2.5em;
 }
 

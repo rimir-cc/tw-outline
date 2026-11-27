@@ -28,7 +28,7 @@ type: text/vnd.tiddlywiki
 |`outline-undo` / `outline-redo` |ctrl-Z / ctrl-Y, ctrl-shift-Z |Undo / redo the last change made in the outline (see Undo) |
 |`outline-menu` |alt-Enter |Block menu: insert a new block after or before the unit, or turn it into another type; Up/Down, Enter runs, Escape closes. In the editor: save, then only //Turn into//; the editor opens again on the unit, also after Escape |
 |`outline-open` |Enter |Open the transclusion target in outline mode |
-|`outline-clear` |Escape |Clear selection |
+|`outline-clear` |Escape |Clear selection; with nothing selected: put the outline to sleep |
 |`outline-save` |ctrl-Enter |Save the edit |
 |`outline-continue` |Enter |Save and open a new unit (single-line units). In the middle of a list item's text: split it (see Split); at the start of a filled list item or paragraph: a new empty one above (see New unit) |
 |`outline-newline` |shift-Enter |Newline in the editor (saved as `<br>` in list items and headings) |
@@ -165,8 +165,9 @@ Insert before offers the same types as Insert after and puts the block directly 
 !! State and config
 
 |!Tiddler |!Purpose |
-|`$:/state/rimir/outline/on/<title>` |Outline mode on (`yes`) / off |
-|`$:/temp/rimir/outline/...` |Editor buffer, selection, open key overview (`help/<title>`), undo history (`undo/<title>`, JSON) while active |
+|`$:/temp/rimir/outline/...` |Editor buffer, selection, open key overview (`help/<title>`), undo history (`undo/<title>`, JSON) while active. While a tiddler's selection or buffer exists its outline is awake; closing the tiddler deletes them |
+|`$:/config/rimir/outline/enabled` |`yes` (default): every eligible tiddler has the outline, woken with Ctrl-Click; `no`: none |
+|Field `outline: no` |Leaves this tiddler out |
 |`$:/config/rimir/outline/badges` |Type badges: `all` (default), `headings` (h1–h6 only) or `off`. Sets class `rr-ol-badges-<mode>` on the frame; the badge text is the unit's `data-ol-type` |
 |`$:/config/rimir/outline/quick-delete-items` |`yes` (default): Delete removes list items without sub-items without asking; `no`: always ask |
 |`$:/config/rimir/outline/undo-depth` |Number of undo steps kept per tiddler (default 20) |
