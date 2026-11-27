@@ -1,0 +1,8 @@
+title: $:/plugins/rimir/outline/blocktypes/quote-block
+tags: $:/tags/rimir/outline/BlockType
+name: quote-block
+caption: Quote block
+badge: quote
+behaviour: fenced
+open: <<<
+close: <<<

@@ -221,6 +221,78 @@ describe("outline widget", function() {
 		expect(b.domNodes[0].textContent).toBe("b");
 	});
 
+	it("a typed block of a registered type gets its type's badge and data-ol-typed", function() {
+		var wiki = makeWiki([{title: "T", text: "para\n\n$$$text/vnd.graphviz\ndigraph{}\n$$$\n\n$$$text/plain\nx\n$$$"},
+				{title: "GV", tags: "$:/tags/rimir/outline/BlockType", name: "graphviz", caption: "Graphviz graph", badge: "graphviz",
+					behaviour: "typed", "content-type": "text/vnd.graphviz"}]),
+			r = renderOutline(wiki, "T"),
+			typed = r.widget.units.filter(function(e) { return e.unit.kind === "block" && e.unit.start > 0; });
+		expect(typed.length).toBe(2);
+		expect(typed[0].domNodes[0].getAttribute("data-ol-type")).toBe("graphviz");
+		expect(typed[0].domNodes[0].getAttribute("data-ol-typed")).toBe("yes");
+		expect(typed[1].domNodes[0].getAttribute("data-ol-typed")).toBeFalsy();
+		r.widget.sleep();
+		expect(typed[0].domNodes[0].getAttribute("data-ol-typed")).toBeFalsy();
+	});
+
+	describe("diagram transclusions", function() {
+		var TYPE = {title: "GV", tags: "$:/tags/rimir/outline/BlockType", name: "graphviz", caption: "Graphviz graph",
+			badge: "graphviz", behaviour: "typed", "content-type": "text/plain", contexts: "block item", inline: "transclude"};
+
+		function stamps(r) {
+			return r.widget.units.map(function(e) {
+				return e.domNodes.map(function(n) { return n.getAttribute("data-ol-id") + ":" + n.getAttribute("data-ol-type"); }).join(",");
+			});
+		}
+
+		it("marks a diagram transcluded inline in a unit; it is no unit of its own", function() {
+			var wiki = makeWiki([TYPE, {title: "T", text: "* a {{G}}\n* b"}, {title: "G", type: "text/plain", text: "g"}]),
+				r = renderOutline(wiki, "T"),
+				item = r.widget.units.filter(function(e) { return e.unit.kind === "item"; })[0].unit.id,
+				targets = r.widget.diagramTargets(item);
+			expect(targets.length).toBe(1);
+			expect(targets[0].title).toBe("G");
+			expect(targets[0].node.getAttribute("data-ol-diagram-target")).toBe("G");
+			expect(r.widget.units.length).toBe(3);
+			expect(r.widget.diagramTargets(item + 1)).toEqual([]);
+		});
+
+		it("leaves transclusions of other types alone", function() {
+			var wiki = makeWiki([TYPE, {title: "T", text: "* a {{O}}\n* b"}, {title: "O", text: "other"}]),
+				r = renderOutline(wiki, "T"),
+				plain = renderOutline(makeWiki([{title: "T", text: "* a {{O}}\n* b"}, {title: "O", text: "other"}]), "T");
+			expect(r.widget.diagramTargets(1)).toEqual([]);
+			expect(stamps(r)).toEqual(stamps(plain));
+			expect(r.container.innerHTML).toBe(plain.container.innerHTML);
+		});
+
+		it("marks a block-level diagram transclusion unit", function() {
+			var wiki = makeWiki([TYPE, {title: "T", text: "para\n\n{{G}}"}, {title: "G", type: "text/plain", text: "g"}]),
+				r = renderOutline(wiki, "T"),
+				unit = r.widget.units.filter(function(e) { return e.unit.kind === "transclusion"; })[0];
+			expect(unit.domNodes[0].getAttribute("data-ol-diagram")).toBe("yes");
+			expect(r.widget.diagramTargets(unit.unit.id)[0].title).toBe("G");
+		});
+
+		it("a diagram inside another transcluded tiddler belongs to that tiddler, not to the host's unit", function() {
+			var wiki = makeWiki([TYPE, {title: "T", text: "* a {{N}}\n* b\n\n{{N}}"}, {title: "N", text: "n {{G}}"},
+					{title: "G", type: "text/plain", text: "g"}]),
+				r = renderOutline(wiki, "T");
+			expect(r.widget.diagrams).toEqual([]);
+			expect(r.container.innerHTML).not.toContain("data-ol-diagram");
+		});
+
+		it("an idle outline marks nothing; sleep removes the marks", function() {
+			var wiki = makeWiki([TYPE, {title: "T", text: "* a {{G}}"}, {title: "G", type: "text/plain", text: "g"}]),
+				r = renderIdle(wiki, "T");
+			expect(r.container.innerHTML).not.toContain("data-ol-diagram-target");
+			r.widget.wake();
+			expect(r.container.innerHTML).toContain("data-ol-diagram-target");
+			r.widget.sleep();
+			expect(r.container.innerHTML).not.toContain("data-ol-diagram-target");
+		});
+	});
+
 	it("renders empty tiddler", function() {
 		var wiki = makeWiki([{title: "T", text: ""}]);
 		var r;

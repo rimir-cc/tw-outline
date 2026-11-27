@@ -1,0 +1,4 @@
+title: $:/tags/rimir/outline/BlockType
+list: [[$:/plugins/rimir/outline/blocktypes/paragraph]] [[$:/plugins/rimir/outline/blocktypes/heading1]] [[$:/plugins/rimir/outline/blocktypes/heading2]] [[$:/plugins/rimir/outline/blocktypes/heading3]] [[$:/plugins/rimir/outline/blocktypes/bulleted]] [[$:/plugins/rimir/outline/blocktypes/numbered]] [[$:/plugins/rimir/outline/blocktypes/quote]] [[$:/plugins/rimir/outline/blocktypes/quote-block]] [[$:/plugins/rimir/outline/blocktypes/code]]
+
+Block types of the outline plugin: the block menu, "Turn into" and the badges follow these tiddlers, in this order.

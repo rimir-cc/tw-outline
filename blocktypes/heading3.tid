@@ -1,0 +1,7 @@
+title: $:/plugins/rimir/outline/blocktypes/heading3
+tags: $:/tags/rimir/outline/BlockType
+name: heading3
+caption: Heading 3
+badge: h3
+behaviour: heading
+level: 3

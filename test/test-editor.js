@@ -19,7 +19,8 @@ describe("outline editor", function() {
 
 	// Shortcut config and the editor template (shadows of the plugin) copied into each test wiki
 	function pluginTiddlers() {
-		return $tw.wiki.filterTiddlers("[all[shadows+tiddlers]prefix[$:/config/shortcuts/outline-]] [[" + EDITOR + "]]").map(function(title) {
+		return $tw.wiki.filterTiddlers("[all[shadows+tiddlers]prefix[$:/config/shortcuts/outline-]] [[" + EDITOR + "]] " +
+			"[all[shadows+tiddlers]tag[$:/tags/rimir/outline/BlockType]prefix[$:/plugins/rimir/outline/]] [[$:/tags/rimir/outline/BlockType]]").map(function(title) {
 			return $tw.wiki.getTiddler(title).fields;
 		});
 	}
@@ -385,20 +386,91 @@ describe("outline editor", function() {
 			r.widget.select(r.idOf("para"));
 			expect(press(r, 13, {alt: true}).prevented).toBe(true);
 			var inserts = ["insert:paragraph", "insert:heading1", "insert:heading2", "insert:heading3",
-				"insert:bulleted", "insert:numbered", "insert:quote", "insert:code"];
+				"insert:bulleted", "insert:numbered", "insert:quote", "insert:quote-block", "insert:code"];
 			expect(labels(r)).toEqual(inserts.concat(inserts, [
 				"convert:heading1", "convert:heading2", "convert:heading3", "convert:bulleted", "convert:numbered",
-				"convert:quote", "convert:code"]));
-			expect(r.widget.menu.entries[8].group).toBe("group-insert-before");
-			expect(r.widget.menu.entries[8].where).toBe("before");
+				"convert:quote", "convert:quote-block", "convert:code"]));
+			expect(r.widget.menu.entries[9].group).toBe("group-insert-before");
+			expect(r.widget.menu.entries[9].where).toBe("before");
 			expect(hasClass(r.widget.menu.node, "rr-ol-menu")).toBe(true);
 			// Escape closes, nothing written
 			press(r, 27);
 			expect(r.widget.menu).toBe(null);
-			// A single bullet: only bulleted/numbered
+			// A bullet: insert before/after it too, and it turns into every other type
 			r.widget.select(r.idOf("* a"));
 			press(r, 13, {alt: true});
-			expect(labels(r)).toEqual(["convert:numbered"]);
+			expect(labels(r)).toEqual(inserts.concat(inserts, ["convert:paragraph", "convert:heading1", "convert:heading2",
+				"convert:heading3", "convert:numbered", "convert:quote", "convert:quote-block", "convert:code"]));
+		});
+
+		it("follows the block type tiddlers: an untagged override drops the type from insert and turn into", function() {
+			var r = render("para\n\nnext", [{title: "$:/plugins/rimir/outline/blocktypes/heading3", name: "heading3",
+				caption: "Heading 3", behaviour: "heading", level: "3"}]);
+			r.widget.select(r.idOf("para"));
+			press(r, 13, {alt: true});
+			expect(labels(r).filter(function(l) { return /heading3/.test(l); })).toEqual([]);
+			expect(labels(r)).toContain("convert:heading2");
+		});
+
+		it("insert before the first bullet makes a new first bullet", function() {
+			var r = render("* a\n* b");
+			r.widget.select(r.idOf("* a"));
+			press(r, 13, {alt: true});
+			var i = r.widget.menu.entries.findIndex(function(e) { return e.where === "before" && e.type === "bulleted"; });
+			r.widget.setMenuActive(i);
+			press(r, 13);
+			r.type("first");
+			r.widget.saveEdit();
+			expect(r.wiki.getTiddlerText("T")).toBe("* first\n* a\n* b");
+		});
+
+		it("alt-enter in an empty new editor offers every type; picking one changes what it creates, nothing is written", function() {
+			var r = render("! H\n\npara");
+			r.widget.select(r.idOf("! H"));
+			r.widget.startEdit(r.idOf("! H"), {isNew: true});
+			expect(r.widget.editor.kind).toBe("block");
+			r.widget.editMenu();
+			expect(r.widget.menu.entries.map(function(e) { return e.action + ":" + e.type; })).toEqual(["retype:paragraph",
+				"retype:heading1", "retype:heading2", "retype:heading3", "retype:bulleted", "retype:numbered", "retype:quote",
+				"retype:quote-block", "retype:code"]);
+			choose(r, "retype", "heading2");
+			expect(r.wiki.getTiddlerText("T")).toBe("! H\n\npara");
+			expect(r.widget.editor.isNew).toBe(true);
+			expect(r.widget.editor.blockType).toBe("heading2");
+			r.type("x");
+			r.widget.saveEdit();
+			// A new heading at a heading goes after its section (as when inserted from the block menu)
+			expect(r.wiki.getTiddlerText("T")).toBe("! H\n\npara\n\n!! x");
+		});
+
+		it("escape on the retype menu keeps the new editor as it was", function() {
+			var r = render("para");
+			r.widget.select(r.idOf("para"));
+			r.widget.startEdit(r.idOf("para"), {isNew: true});
+			r.widget.editMenu();
+			press(r, 27);
+			expect(r.widget.menu).toBe(null);
+			expect(r.widget.editor.isNew).toBe(true);
+			expect(r.widget.editor.blockType).toBe("");
+		});
+
+		it("a new block's editor has the type's caption as placeholder", function() {
+			var r = render("para");
+			r.widget.select(r.idOf("para"));
+			press(r, 13, {alt: true});
+			choose(r, "insert", "heading2");
+			var w = r.widget.editor.widget;
+			while(w.children && w.children.length) { w = w.children[0]; }
+			expect(w.getVariable("outline-edit-placeholder")).toBe("Heading 2");
+		});
+
+		it("labels the types with their captions", function() {
+			var r = render("para", [{title: "$:/plugins/rimir/outline/blocktypes/paragraph", tags: "$:/tags/rimir/outline/BlockType",
+				name: "paragraph", caption: "Text", badge: "paragraph", behaviour: "paragraph"}]);
+			r.widget.select(r.idOf("para"));
+			press(r, 13, {alt: true});
+			expect(r.widget.menu.node.textContent).toContain("Text");
+			expect(r.widget.menu.node.textContent).toContain("Heading 1");
 		});
 
 		it("up/down move the active entry; another key closes the menu and acts as usual", function() {
@@ -534,6 +606,146 @@ describe("outline editor", function() {
 			r.widget.select(r.idOf("para"));
 			expect(press(r, 13, {alt: true}).prevented).toBe(true);
 			expect(r.widget.menu).toBe(null);
+		});
+
+		describe("diagrams: add to an item, edit in place", function() {
+			var TYPE = {title: "TT", tags: "$:/tags/rimir/outline/BlockType", name: "diag", caption: "Diagram", badge: "x",
+					behaviour: "typed", "content-type": "text/plain", contexts: "block item", inline: "transclude", starter: "s"},
+				PILL = {title: "TP", tags: "$:/tags/rimir/outline/BlockType", name: "pill", caption: "Pill", badge: "pill",
+					behaviour: "paragraph", contexts: "item", inline: "<<pill \"$content$\">>"};
+
+			function menuOn(r, source) {
+				r.widget.select(r.idOf(source));
+				press(r, 13, {alt: true});
+			}
+
+			it("add to this item: the diagram is written on the first save, with its reference", function() {
+				var r = render("* Build pipeline\n* b", [TYPE, PILL]);
+				menuOn(r, "* Build pipeline");
+				expect(labels(r)).toContain("add:diag");
+				expect(labels(r)).toContain("add:pill");
+				expect(labels(r)).not.toContain("insert:pill");
+				choose(r, "add", "diag");
+				expect(r.widget.editor.target.isNew).toBe(true);
+				expect(r.wiki.getTiddlerText(BUF + "T")).toBe("s");
+				expect(r.wiki.tiddlerExists("Build pipeline (x)")).toBe(false);
+				r.type("graph");
+				r.widget.saveEdit();
+				var g = r.wiki.getTiddler("Build pipeline (x)");
+				expect(g.fields.type).toBe("text/plain");
+				expect(g.fields.text).toBe("graph");
+				expect(r.wiki.getTiddlerText("T")).toBe("* Build pipeline {{Build pipeline (x)}}\n* b");
+				expect(r.widget.editor).toBe(null);
+				r.refresh();
+				r.widget.undoStep(true);
+				expect(r.wiki.getTiddlerText("T")).toBe("* Build pipeline\n* b");
+				expect(r.wiki.tiddlerExists("Build pipeline (x)")).toBe(true);
+			});
+
+			it("a new block of a type with a starter text opens with it", function() {
+				var r = render("para", [TYPE]);
+				r.widget.select(r.idOf("para"));
+				press(r, 13, {alt: true});
+				choose(r, "insert", "diag");
+				expect(r.wiki.getTiddlerText(BUF + "T")).toBe("s");
+				r.widget.saveEdit();
+				expect(r.wiki.getTiddlerText("T")).toBe("para\n\n$$$text/plain\ns\n$$$");
+			});
+
+			it("escape before the first save leaves no trace", function() {
+				var r = render("* a\n* b", [TYPE]);
+				menuOn(r, "* a");
+				choose(r, "add", "diag");
+				r.type("graph");
+				r.widget.cancelEdit();
+				expect(r.widget.editor).toBe(null);
+				expect(r.wiki.getTiddlerText("T")).toBe("* a\n* b");
+				expect(r.wiki.tiddlerExists("a (x)")).toBe(false);
+			});
+
+			it("names the new diagram after the item's plain text, unique; the host title when the item has none", function() {
+				var r = render("* //Build// [[pipe|Pipe]] {{O}}\n* {{O}}", [TYPE, {title: "Build pipe (x)", text: "taken"}, {title: "O", text: "o"}]);
+				expect(r.widget.newDiagramTitle(r.idOf("* //Build// [[pipe|Pipe]] {{O}}"), "x")).toBe("Build pipe (x) 1");
+				expect(r.widget.newDiagramTitle(r.idOf("* {{O}}"), "x")).toBe("T (x)");
+				var words = "* " + new Array(12).join("word ").trim(),
+					long = render(words + "\n* b", [TYPE]);
+				expect(long.widget.newDiagramTitle(long.idOf(words), "x")).toBe("word word word word word word word word (x)");
+			});
+
+			it("edit a transcluded diagram from the item's menu; escape changes nothing", function() {
+				var r = render("* a {{G}}\n* b", [TYPE, {title: "G", type: "text/plain", text: "g"}]);
+				menuOn(r, "* a {{G}}");
+				var i = r.widget.menu.entries.findIndex(function(e) { return e.action === "edit-target" && e.title === "G"; });
+				expect(i).not.toBe(-1);
+				r.widget.setMenuActive(i);
+				press(r, 13);
+				expect(r.widget.editor.target.title).toBe("G");
+				expect(r.wiki.getTiddlerText(BUF + "T")).toBe("g");
+				r.type("h");
+				r.widget.saveEdit();
+				expect(r.wiki.getTiddlerText("G")).toBe("h");
+				expect(r.wiki.getTiddlerText("T")).toBe("* a {{G}}\n* b");
+				r.refresh();
+				r.widget.startTargetEdit(r.idOf("* a {{G}}"), {title: "G"});
+				r.type("zzz");
+				r.widget.cancelEdit();
+				expect(r.wiki.getTiddlerText("G")).toBe("h");
+			});
+
+			it("double-click on a diagram in an item opens its editor; Enter on a block-level diagram too", function() {
+				var r = render("* a {{G}}\n* b\n\n{{G}}\n\n{{W}}", [TYPE, {title: "G", type: "text/plain", text: "g"}, {title: "W", text: "w"}]);
+				var node = r.widget.diagramTargets(r.idOf("* a {{G}}"))[0].node;
+				r.widget.handleDblClick({target: node, preventDefault: function() {}});
+				expect(r.widget.editor.target.title).toBe("G");
+				r.widget.cancelEdit();
+				r.widget.select(r.idOf("{{G}}"));
+				press(r, 13);
+				expect(r.widget.editor && r.widget.editor.target && r.widget.editor.target.title).toBe("G");
+				r.widget.cancelEdit();
+			});
+
+			it("a click on a diagram in an item selects the item, it does not open the diagram tiddler", function() {
+				var r = render("* a {{G}}\n* b", [TYPE, {title: "G", type: "text/plain", text: "g"}]),
+					opened = [];
+				r.widget.openTarget = function(title) { opened.push(title); };
+				var node = r.widget.diagramTargets(r.idOf("* a {{G}}"))[0].node;
+				r.widget.handleClick({target: node, ctrlKey: false, metaKey: false, preventDefault: function() {}, stopPropagation: function() {}});
+				expect(opened).toEqual([]);
+				expect(r.widget.selectedId).toBe(r.idOf("* a {{G}}"));
+			});
+
+			it("a double-click on a wikitext transclusion does not open the diagram editor", function() {
+				var r = render("para\n\n{{W}}", [TYPE, {title: "W", text: "w"}]);
+				// (the fake DOM cannot read the marker's attributes: the line itself, and the guard below)
+				r.widget.handleDblClick({target: r.widget.units[r.idOf("{{W}}")].domNodes[0], preventDefault: function() {}});
+				expect(r.widget.editor && r.widget.editor.target).toBeFalsy();
+				expect(r.widget.startTargetEdit(r.idOf("{{W}}"), {title: "W"})).toBe(false);
+			});
+
+			it("a diagram name never breaks its {{...}} reference", function() {
+				var r = render("* Option A | Option B\n* Done!! next {x}\n* c", [TYPE]);
+				expect(r.widget.newDiagramTitle(r.idOf("* Option A | Option B"), "x")).toBe("Option A Option B (x)");
+				expect(r.widget.newDiagramTitle(r.idOf("* Done!! next {x}"), "x")).toBe("Done! next x (x)");
+			});
+
+			it("a template type appends its template with the content to the item", function() {
+				var r = render("* a\n* b", [PILL]);
+				menuOn(r, "* a");
+				choose(r, "add", "pill");
+				r.type("x");
+				r.widget.saveEdit();
+				expect(r.wiki.getTiddlerText("T")).toBe("* a <<pill \"x\">>\n* b");
+			});
+
+			it("only save and escape act in the diagram editor", function() {
+				var r = render("* a {{G}}\n* b", [TYPE, {title: "G", type: "text/plain", text: "g"}]);
+				r.widget.startTargetEdit(r.idOf("* a {{G}}"), {title: "G"});
+				var ev = {keyCode: 9, shiftKey: false, altKey: false, ctrlKey: false, metaKey: false, defaultPrevented: false,
+					preventDefault: function() { this.defaultPrevented = true; }, stopPropagation: function() {}};
+				r.widget.handleEditorKeydown(ev);
+				expect(ev.defaultPrevented).toBe(false);
+				expect(r.wiki.getTiddlerText("T")).toBe("* a {{G}}\n* b");
+			});
 		});
 	});
 

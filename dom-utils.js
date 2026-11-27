@@ -95,10 +95,7 @@ function tagOf(node) {
 
 var LIST_TYPES = {ul: "bullet-list", ol: "numbered-list", dl: "definitions", blockquote: "quote"},
 	ITEM_TYPES = {ul: "bullet", ol: "numbered", blockquote: "quote"},
-	BLOCK_TYPES = {p: "paragraph", pre: "code-block", table: "table", blockquote: "quote", hr: "rule"},
-	// Types of the block menu (format-wikitext BLOCK_TYPES) as badge types
-	NEW_BLOCK_TYPES = {paragraph: "paragraph", heading1: "h1", heading2: "h2", heading3: "h3",
-		bulleted: "bullet", numbered: "numbered", quote: "quote", code: "code-block"};
+	BLOCK_TYPES = {p: "paragraph", pre: "code-block", table: "table", blockquote: "quote", hr: "rule"};
 
 /*
 Badge type of a unit (kind) from its first DOM node: paragraph, h1-h6, code-block, table, quote, rule, bullet,
@@ -118,6 +115,3 @@ exports.unitType = function(kind, node) {
 	}
 };
 
-exports.newBlockType = function(blockType) {
-	return NEW_BLOCK_TYPES[blockType] || "";
-};

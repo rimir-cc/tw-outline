@@ -1,0 +1,7 @@
+title: $:/plugins/rimir/outline/blocktypes/numbered
+tags: $:/tags/rimir/outline/BlockType
+name: numbered
+caption: Numbered list
+badge: numbered
+behaviour: item
+marker: #

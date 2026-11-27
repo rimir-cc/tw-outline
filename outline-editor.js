@@ -45,16 +45,18 @@ var formats = require("$:/plugins/rimir/outline/formats.js"),
 	utils = require("$:/plugins/rimir/outline/text-utils.js"),
 	model = require("$:/plugins/rimir/outline/model.js"),
 	dom = require("$:/plugins/rimir/outline/dom-utils.js"),
+	blockTypes = require("$:/plugins/rimir/outline/block-types.js"),
 	SELECTION_PREFIX = require("$:/plugins/rimir/outline/outline-keys.js").SELECTION_PREFIX;
 
 var BUFFER_PREFIX = "$:/temp/rimir/outline/edit/",
 	EDITOR_TIDDLER = "$:/plugins/rimir/outline/ui/editor",
 	HOST_CLASS = "rr-ol-editor-host",
+	// The editor of another tiddler (a diagram) or of a template's content (startTargetEdit)
+	TARGET_CLASS = "rr-ol-target-editor",
 	// Edited unit hidden (blocks) / only its own content hidden (items: sub-items stay visible)
 	EDITING_CLASS = "rr-ol-editing",
 	EDITING_OWN_CLASS = "rr-ol-editing-own",
 	IS_EDITING_CLASS = "rr-ol-is-editing",
-	BLOCK_LABEL_PREFIX = "$:/plugins/rimir/outline/language/block/",
 	NOTICES = {
 		conflict: {cls: "rr-ol-notice rr-ol-conflict", text: "The tiddler changed underneath. Copy your text."},
 		children: {cls: "rr-ol-notice rr-ol-children", text: "Remove or move its children first."},
@@ -80,8 +82,8 @@ function ownersOf(wiki) {
 }
 
 // Editor state for unit kind `unitKind` (for a new unit: the anchor's kind); id and multiline are set by the caller
-function editorState(unitKind, isNew, origSource, origStart, origText, blockType, adapter, where) {
-	var typeKind = isNew && blockType && adapter && adapter.blockTypeKind ? adapter.blockTypeKind(blockType) : null;
+function editorState(unitKind, isNew, origSource, origStart, origText, blockType, adapter, where, types) {
+	var typeKind = isNew && blockType && adapter && adapter.blockTypeKind ? adapter.blockTypeKind(blockType, types) : null;
 	return {
 		host: null,
 		widget: null,
@@ -161,13 +163,15 @@ methods.startEdit = function(id, opts) {
 		isNew = !!opts.isNew,
 		adapter = this.getAdapter(),
 		ed = editorState(unit.kind, isNew, this.model.text.substring(unit.start, unit.end), unit.start, this.model.text,
-			opts.blockType, adapter, opts.where);
+			opts.blockType, adapter, opts.where, blockTypes.getBlockTypes(this.wiki));
 	id = atEnd ? -1 : id;
 	ed.id = id;
-	ed.multiline = isNew ? ed.blockType === "code" : adapter.isMultiline(this.model, id);
+	ed.multiline = isNew ? this.newTypeIsMultiline(ed.blockType) : adapter.isMultiline(this.model, id);
 	this.editor = ed;
 	ownersOf(this.wiki)[this.bufferTitle()] = this;
-	var initial = isNew ? "" : adapter.editSource(this.model.text, this.model, id);
+	// A new block of a type with a starter text (a diagram: a minimal valid graph) opens with it
+	var newType = isNew && ed.blockType ? blockTypes.getBlockType(this.wiki, ed.blockType) : null,
+		initial = isNew ? (newType ? newType.starter : "") : adapter.editSource(this.model.text, this.model, id, blockTypes.getBlockTypes(this.wiki));
 	this.wiki.addTiddler(new $tw.Tiddler({
 		title: this.bufferTitle(),
 		text: initial,
@@ -194,6 +198,11 @@ owns the editor, in read-only wikis, or for tiddlers without an adapter.
 methods.restoreEditor = function() {
 	var title = this.bufferTitle(),
 		buffer = this.wiki.getTiddler(title);
+	if(!this.editor && buffer && buffer.fields["outline-target-mode"] === "yes" && !this.otherOwner()) {
+		// A diagram or template edit is not kept over a re-render
+		this.wiki.deleteTiddler(title);
+		return false;
+	}
 	if(this.editor || !buffer || buffer.fields["outline-orig-start"] === undefined || this.otherOwner() ||
 		this.isReadOnly() || !this.getAdapter()) {
 		return false;
@@ -203,7 +212,7 @@ methods.restoreEditor = function() {
 		hint = hints[title] || {},
 		ed = editorState(f["outline-unit-kind"] || "", f["outline-is-new"] === "yes", f["outline-orig-source"] || "",
 			parseInt(f["outline-orig-start"], 10), f["outline-orig-text"] || "", f["outline-block-type"], this.getAdapter(),
-			f["outline-insert"]);
+			f["outline-insert"], blockTypes.getBlockTypes(this.wiki));
 	delete hints[title];
 	this.editor = ed;
 	ownersOf(this.wiki)[title] = this;
@@ -212,7 +221,7 @@ methods.restoreEditor = function() {
 	if(ed.id === -1 && !(target && ed.where === "end")) {
 		ed.notice = "conflict";
 	}
-	ed.multiline = ed.isNew ? ed.blockType === "code" :
+	ed.multiline = ed.isNew ? this.newTypeIsMultiline(ed.blockType) :
 		(ed.id === -1 ? /[\r\n]/.test(ed.origSource) : this.getAdapter().isMultiline(this.model, ed.id));
 	ed.caret = hint.caret || null;
 	ed.depth = parseInt(f["outline-depth"], 10) || 0;
@@ -257,14 +266,17 @@ DOM nodes the editor host goes before, into or after. A new block that is insert
 */
 methods.editAnchorNodes = function() {
 	var ed = this.editor,
-		adapter = this.getAdapter();
-	if(ed.isNew && ed.where === "after" && ed.blockType && adapter && adapter.insertsAfterSubtree(this.model, ed.id, ed.blockType)) {
-		var last = this.lastSectionNode(ed.id);
+		adapter = this.getAdapter(),
+		types = blockTypes.getBlockTypes(this.wiki),
+		// A new block at a list item goes next to the whole list (insertAnchor)
+		id = ed.isNew && ed.blockType && adapter ? adapter.insertAnchor(this.model, ed.id, ed.blockType, types) : ed.id;
+	if(ed.isNew && ed.where === "after" && ed.blockType && adapter && adapter.insertsAfterSubtree(this.model, id, ed.blockType, types)) {
+		var last = this.lastSectionNode(id);
 		if(last) {
 			return [last];
 		}
 	}
-	return this.units[ed.id].domNodes;
+	return this.units[id].domNodes;
 };
 
 // Last top-level DOM node of unit `id` and its section (sub-sections included), or null
@@ -290,6 +302,12 @@ methods.editorType = function() {
 	var ed = this.editor,
 		anchor = ed.id !== -1 && this.units[ed.id] && this.units[ed.id].domNodes[0],
 		anchorType = anchor && anchor.getAttribute ? anchor.getAttribute("data-ol-type") : "";
+	if(ed.target) {
+		var tiddler = ed.target.title ? this.wiki.getTiddler(ed.target.title) : null,
+			type = ed.target.typeName ? blockTypes.getBlockType(this.wiki, ed.target.typeName) :
+				(tiddler ? blockTypes.typeForContentType(this.wiki, tiddler.fields.type) : null);
+		return type ? type.badge : "";
+	}
 	if(ed.placement === "inside") {
 		return "";
 	}
@@ -297,7 +315,8 @@ methods.editorType = function() {
 		return anchorType || "";
 	}
 	if(ed.blockType) {
-		return dom.newBlockType(ed.blockType);
+		var type = blockTypes.getBlockType(this.wiki, ed.blockType);
+		return type ? type.badge : "";
 	}
 	var marker = ed.depth ? this.newItemMarker() : "",
 		markerType = {"*": "bullet", "#": "numbered"}[marker.charAt(marker.length - 1)];
@@ -307,9 +326,9 @@ methods.editorType = function() {
 methods.placeEditor = function(focus) {
 	var ed = this.editor,
 		nodes = ed.id === -1 ? [] : this.editAnchorNodes(),
-		host = this.document.createElement(ed.isNew && ed.unitKind === "item" && nodes.length ? "li" : "div"),
+		host = this.document.createElement(ed.isNew && ed.unitKind === "item" && ed.kind === "item" && nodes.length ? "li" : "div"),
 		self = this;
-	host.className = HOST_CLASS;
+	host.className = HOST_CLASS + (ed.target ? " " + TARGET_CLASS : "");
 	var type = this.editorType();
 	if(type) {
 		host.setAttribute("data-ol-type", type);
@@ -343,7 +362,7 @@ methods.placeEditor = function(focus) {
 			"len": String(this.wiki.getTiddlerText(this.bufferTitle(), "").length),
 			"outline-edit-focus": focus ? "yes" : "no",
 			// A new block of a chosen type names its type in the empty field
-			"outline-edit-placeholder": ed.blockType ? this.wiki.getTiddlerText(BLOCK_LABEL_PREFIX + ed.blockType, "") : ""
+			"outline-edit-placeholder": this.newTypeCaption(ed.blockType)
 		}
 	});
 	ed.widget.render(host, null);
@@ -471,6 +490,9 @@ methods.saveEdit = function(opts) {
 	if(!ed) {
 		return false;
 	}
+	if(ed.target) {
+		return this.saveTargetEdit();
+	}
 	var newSource = this.wiki.getTiddlerText(this.bufferTitle(), ""),
 		blank = !/\S/.test(newSource);
 	if(ed.isNew && blank) {
@@ -493,7 +515,7 @@ methods.saveEdit = function(opts) {
 	}
 	var result;
 	if(ed.isNew && ed.blockType) {
-		result = adapter.insertBlock(current, target.model, target.id, ed.blockType, newSource, ed.where);
+		result = adapter.insertBlock(current, target.model, target.id, ed.blockType, newSource, ed.where, blockTypes.getBlockTypes(this.wiki));
 		if(!result) {
 			this.closeEditor(true);
 			dom.focus(this.domNode);
@@ -515,7 +537,8 @@ methods.saveEdit = function(opts) {
 			return false;
 		}
 	} else {
-		result = adapter.replace(current, target.model, target.id, newSource.replace(/\r?\n/g, utils.eol(current)));
+		result = adapter.replace(current, target.model, target.id, newSource.replace(/\r?\n/g, utils.eol(current)),
+			blockTypes.getBlockTypes(this.wiki));
 	}
 	var kind = ed.kind,
 		index = ed.isNew && ed.where === "after" ? target.id + 1 : Math.max(0, target.id);
@@ -744,6 +767,19 @@ methods.handleEditorKeydown = function(event) {
 	}
 	// Any key (Home, arrows, ...) places the caret itself: settleCaret leaves it alone
 	ed.keyed = true;
+	if(ed.target) {
+		// The editor of another tiddler (a diagram) or of a template's content: save and cancel only
+		if(this.keyMatches(event, "outline-save") || (ed.target.template && this.keyMatches(event, "outline-continue"))) {
+			this.saveEdit();
+		} else if(this.keyMatches(event, "outline-cancel")) {
+			this.cancelEdit();
+		} else {
+			return;
+		}
+		event.preventDefault();
+		event.stopPropagation();
+		return;
+	}
 	if(this.keyMatches(event, "outline-save")) {
 		this.saveEdit();
 	} else if(!ed.multiline && this.keyMatches(event, "outline-continue")) {
@@ -938,11 +974,19 @@ methods.editAgain = function(caret) {
 
 /*
 Alt-Enter in the editor: save, then the block menu with the "Turn into" entries of the unit (outline-menu.js). The
-editor opens again on the unit, converted or not (Escape), the caret where it was. Blank text: nothing happens.
+editor opens again on the unit, converted or not (Escape), the caret where it was. Blank text: a new unit offers every
+block type (retypeMenu, outline-menu.js), an existing one does nothing.
 */
 methods.editMenu = function() {
 	var ed = this.editor;
-	if(!ed || !/\S/.test(this.wiki.getTiddlerText(this.bufferTitle(), ""))) {
+	if(!ed || ed.target) {
+		return;
+	}
+	if(!/\S/.test(this.wiki.getTiddlerText(this.bufferTitle(), ""))) {
+		// A new, still empty unit: choose what it becomes
+		if(ed.isNew) {
+			this.retypeMenu();
+		}
 		return;
 	}
 	var caret = this.editorCaret();
@@ -1032,7 +1076,7 @@ function editMergeSteps() {
 	}
 	var id = this.selectedId,
 		target = adapter.mergeTarget(this.model, id),
-		join = target === -1 ? 0 : adapter.editSource(this.model.text, this.model, target).length;
+		join = target === -1 ? 0 : adapter.editSource(this.model.text, this.model, target, blockTypes.getBlockTypes(this.wiki)).length;
 	this.operate("merge", blank ? "" : undefined);
 	this.ensureCurrent();
 	// Merged: the item above is selected, edited at the join; refused: the same item again, at its start
@@ -1195,6 +1239,139 @@ methods.openTarget = function(title) {
 		navigateFromNode: this
 	});
 	return true;
+};
+
+/*
+The editor of another tiddler or of a template's content, below unit `id` (the unit is not hidden; its text is not
+touched until the save). opts:
+  {title}             - a diagram tiddler that unit `id` transcludes: its text is edited, the save writes it
+  {isNew, typeName}   - "Add to this item" with a type of the item context: a transclude type starts with its starter
+                        text; the first save creates the tiddler (newDiagramTitle, the type's content type) and appends
+                        {{title}} to the item's line. A template type (inline: a template with $content$) edits the
+                        content; the save appends the filled template. Escape before the save writes nothing.
+The buffer is the editor buffer of this tiddler, marked outline-target-mode (a re-render does not keep it).
+*/
+methods.startTargetEdit = function(id, opts) {
+	opts = opts || {};
+	if(this.editor) {
+		this.focusEditor();
+		return false;
+	}
+	var owner = this.otherOwner();
+	if(owner) {
+		owner.focusEditor();
+		return false;
+	}
+	var type = opts.isNew ? blockTypes.getBlockType(this.wiki, opts.typeName) : null,
+		existing = opts.isNew ? null : this.wiki.getTiddler(opts.title);
+	// An existing target must be a diagram: a tiddler of a registered typed type (transcluded wikitext is not edited here)
+	if(this.isReadOnly() || !this.getAdapter() || !this.isSelectable(id) || (opts.isNew ? !type || !type.inline :
+		!existing || !blockTypes.typeForContentType(this.wiki, existing.fields.type))) {
+		return false;
+	}
+	var unit = this.units[id].unit,
+		ed = editorState(unit.kind, false, this.model.text.substring(unit.start, unit.end), unit.start, this.model.text,
+			"", this.getAdapter(), "", blockTypes.getBlockTypes(this.wiki)),
+		template = type && type.inline !== "transclude" ? type.inline : "",
+		initial = opts.isNew ? (template ? "" : type.starter) : this.wiki.getTiddlerText(opts.title, "");
+	ed.id = id;
+	ed.target = {title: opts.isNew ? "" : opts.title, isNew: !!opts.isNew, typeName: type ? type.name : "", template: template};
+	ed.placement = "after";
+	ed.multiline = !template;
+	this.editor = ed;
+	ownersOf(this.wiki)[this.bufferTitle()] = this;
+	this.wiki.addTiddler(new $tw.Tiddler({
+		title: this.bufferTitle(),
+		text: initial,
+		type: "text/vnd.tiddlywiki",
+		"outline-orig-edit": initial,
+		"outline-orig-source": ed.origSource,
+		"outline-orig-start": String(ed.origStart),
+		"outline-orig-text": ed.origText,
+		"outline-unit-kind": ed.unitKind,
+		"outline-target-mode": "yes"
+	}));
+	this.placeEditor(true);
+	this.settleCaret();
+	return true;
+};
+
+// Save of the editor opened by startTargetEdit
+methods.saveTargetEdit = function() {
+	var ed = this.editor,
+		target = ed.target,
+		text = this.wiki.getTiddlerText(this.bufferTitle(), "");
+	if(this.isReadOnly()) {
+		this.showNotice("readonly");
+		return false;
+	}
+	if(!target.isNew) {
+		var tiddler = this.wiki.getTiddler(target.title);
+		this.closeEditor(true);
+		dom.focus(this.domNode);
+		if(tiddler && text !== (tiddler.fields.text || "")) {
+			this.wiki.addTiddler(new $tw.Tiddler(tiddler, {text: text}, this.wiki.getModificationFields()));
+		}
+		return true;
+	}
+	if(!/\S/.test(text)) {
+		this.closeEditor(true);
+		dom.focus(this.domNode);
+		return true;
+	}
+	var host = this.wiki.getTiddler(this.tiddlerTitle),
+		current = host ? (host.fields.text || "") : "",
+		located = host ? this.locateEditUnit(current) : null,
+		type = blockTypes.getBlockType(this.wiki, target.typeName);
+	if(!located || !type) {
+		this.showNotice("conflict");
+		return false;
+	}
+	var u = located.model.units[located.id],
+		title = target.template ? "" : this.newDiagramTitle(located.id, type.badge, located.model),
+		snippet = target.template ? target.template.replace(/\$content\$/g, text.replace(/\s*\r?\n\s*/g, " ").trim()) :
+			"{{" + title + "}}";
+	this.closeEditor(true);
+	dom.focus(this.domNode);
+	if(title) {
+		this.wiki.addTiddler(new $tw.Tiddler(this.wiki.getCreationFields(), {title: title, type: type.contentType, text: text},
+			this.wiki.getModificationFields()));
+	}
+	this.writeText(host, utils.splice(current, u.end, u.end, " " + snippet));
+	this.saveSelection(u.start, located.id, u.kind);
+	return true;
+};
+
+/*
+Base name of a new diagram transcluded in unit `id`: its plain text (transclusions, macro calls, HTML tags and
+formatting marks removed, links by their text), cut at a word boundary to about 40 characters, and the badge in
+parentheses; the host title when the unit has no text. Made unique (" 1", " 2", ...) when the name is taken.
+*/
+methods.newDiagramTitle = function(id, badge, model) {
+	model = model || this.model;
+	var source = this.getAdapter().editSource(model.text, model, id),
+		plain = source.replace(/\{\{[^}]*\}\}/g, " ").replace(/<<[\s\S]*?>>/g, " ")
+			.replace(/\[\[([^\]|]*)\|[^\]]*\]\]/g, "$1").replace(/\[\[([^\]]*)\]\]/g, "$1")
+			.replace(/<[^>]+>/g, " ").replace(/''|\/\/|__|~~|\^\^|,,|`|@@/g, "")
+			// Characters that are syntax inside {{...}}: no brackets or parameter bars, no field (!!) or index (##) part
+			.replace(/[{}|\[\]]/g, " ").replace(/!!+/g, "!").replace(/##+/g, "#").replace(/\s+/g, " ").trim();
+	if(plain.length > 40) {
+		var cut = plain.substring(0, 41).replace(/\s+\S*$/, "");
+		plain = cut || plain.substring(0, 40);
+	}
+	return this.wiki.generateNewTitle((plain || this.tiddlerTitle) + " (" + badge + ")");
+};
+
+// True when a new unit of block type `name` takes Enter as a line break (fenced and typed blocks)
+methods.newTypeIsMultiline = function(name) {
+	var type = name ? blockTypes.getBlockType(this.wiki, name) : null;
+	return !!type && (type.behaviour === "fenced" || type.behaviour === "typed");
+};
+
+// Caption of block type `name` (the new unit's placeholder), "" when there is none
+methods.newTypeCaption = function(name) {
+	var type = name ? blockTypes.getBlockType(this.wiki, name) : null;
+	return type ? type.caption : "";
 };
 
 methods.getAdapter = function() {

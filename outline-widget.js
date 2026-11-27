@@ -30,7 +30,8 @@ var Widget = require("$:/core/modules/widgets/widget.js").widget,
 	menu = require("$:/plugins/rimir/outline/outline-menu.js"),
 	undo = require("$:/plugins/rimir/outline/outline-undo.js"),
 	clipboard = require("$:/plugins/rimir/outline/outline-clipboard.js"),
-	dom = require("$:/plugins/rimir/outline/dom-utils.js");
+	dom = require("$:/plugins/rimir/outline/dom-utils.js"),
+	blockTypes = require("$:/plugins/rimir/outline/block-types.js");
 
 var AWAKE_CLASS = "rr-ol-awake",
 	MARKER_TIDDLER = "$:/plugins/rimir/outline/ui/transclusion-marker",
@@ -309,6 +310,7 @@ OutlineWidget.prototype.mapUnits = function() {
 	$tw.utils.each(this.units, function(entry) {
 		self.stamp(entry);
 	});
+	this.mapDiagrams();
 	this.restoreSelection();
 	this.showEmptyHint();
 	this.reattachEditor();
@@ -341,6 +343,7 @@ OutlineWidget.prototype.clearStamps = function() {
 			node.removeAttribute("data-ol-kind");
 			node.removeAttribute("data-ol-start");
 			node.removeAttribute("data-ol-type");
+			node.removeAttribute("data-ol-typed");
 		});
 	});
 	$tw.utils.each(this.markers, function(marker) {
@@ -349,6 +352,59 @@ OutlineWidget.prototype.clearStamps = function() {
 		}
 	});
 	this.markers = [];
+	$tw.utils.each(this.diagrams, function(d) {
+		d.node.removeAttribute("data-ol-diagram-target");
+		d.node.removeAttribute("data-ol-diagram");
+	});
+	this.diagrams = [];
+};
+
+/*
+Diagram transclusions: transclude widgets below the body whose target tiddler is of a registered typed block type's
+content type (block-types.js), inline inside a unit ({{...}} in a list item) or a block-level transclusion unit. Their
+first element gets data-ol-diagram-target (and, for a transclusion unit itself, data-ol-diagram). They are no units of
+their own. Only the host's own content is searched: a diagram inside another transcluded tiddler belongs to that one. Fills this.diagrams = [{title, node, id}] (id: the unit whose element contains it).
+*/
+OutlineWidget.prototype.mapDiagrams = function() {
+	var self = this,
+		wiki = this.wiki,
+		body = this.findBodyTransclude(this),
+		types = blockTypes.getBlockTypes(wiki);
+	this.diagrams = [];
+	if(!body || !types.some(function(t) { return t.behaviour === "typed"; })) {
+		return;
+	}
+	function walk(widget) {
+		$tw.utils.each(widget.children, function(child) {
+			var title = child.parseTreeNode && child.parseTreeNode.type === "transclude" && !child.transcludeVariable ?
+					child.transcludeTitle : null,
+				tiddler = title && wiki.getTiddler(title),
+				node = tiddler && blockTypes.typeForContentType(wiki, tiddler.fields.type) ? elementNodes(child)[0] : null;
+			if(node) {
+				var owner = node;
+				while(owner && !(owner.getAttribute && owner.getAttribute("data-ol-id") !== null && owner.getAttribute("data-ol-id") !== undefined)) {
+					owner = owner.parentNode;
+				}
+				if(owner && owner !== self.domNode) {
+					node.setAttribute("data-ol-diagram-target", title);
+					if(owner === node) {
+						node.setAttribute("data-ol-diagram", "yes");
+					}
+					self.diagrams.push({title: title, node: node, id: parseInt(owner.getAttribute("data-ol-id"), 10)});
+				}
+			} else if(!isForeign(child, self.tiddlerTitle)) {
+				walk(child);
+			}
+		});
+	}
+	walk(body);
+};
+
+// Diagram transclusions inside unit `id` (see mapDiagrams): [{title, node}]
+OutlineWidget.prototype.diagramTargets = function(id) {
+	return (this.diagrams || []).filter(function(d) { return d.id === id; }).map(function(d) {
+		return {title: d.title, node: d.node};
+	});
 };
 
 OutlineWidget.prototype.stamp = function(entry) {
@@ -358,9 +414,15 @@ OutlineWidget.prototype.stamp = function(entry) {
 		node.setAttribute("data-ol-kind", unit.kind);
 		node.setAttribute("data-ol-start", unit.start);
 	});
-	// The type badge (CSS, when on) goes on the first node only
+	// The type badge (CSS, when on) goes on the first node only; a registered typed block ($$$type) shows its type's
+	// badge and is marked data-ol-typed (placed like a code block's badge)
 	if(entry.domNodes.length) {
-		entry.domNodes[0].setAttribute("data-ol-type", dom.unitType(unit.kind, entry.domNodes[0]));
+		var adapter = this.getAdapter(),
+			typed = adapter && adapter.typedBlockType ? adapter.typedBlockType(this.model.text, unit, blockTypes.getBlockTypes(this.wiki)) : null;
+		entry.domNodes[0].setAttribute("data-ol-type", typed ? typed.badge : dom.unitType(unit.kind, entry.domNodes[0]));
+		if(typed) {
+			entry.domNodes[0].setAttribute("data-ol-typed", "yes");
+		}
 	}
 	if(unit.kind === "transclusion" && entry.domNodes.length) {
 		this.addMarker(entry.domNodes[0], unit.target);

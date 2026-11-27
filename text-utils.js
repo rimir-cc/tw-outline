@@ -14,6 +14,11 @@ exports.eol = function(text) {
 	return m && m[0] === "\r\n" ? "\r\n" : "\n";
 };
 
+// Line breaks of a one-line unit's content (heading, list item) as <br>; leading and trailing blank lines dropped
+exports.toBreaks = function(source) {
+	return source.replace(/^(?:[ \t]*\r?\n)+|(?:\r?\n[ \t]*)+$/g, "").replace(/[ \t]*\r?\n/g, "<br>");
+};
+
 exports.splice = function(text, start, end, insert) {
 	return text.substring(0, start) + insert + text.substring(end);
 };

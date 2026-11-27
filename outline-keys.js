@@ -22,6 +22,7 @@ var formats = require("$:/plugins/rimir/outline/formats.js"),
 	findUnit = require("$:/plugins/rimir/outline/model.js").findUnit,
 	checkOp = require("$:/plugins/rimir/outline/model.js").checkOp,
 	dom = require("$:/plugins/rimir/outline/dom-utils.js"),
+	blockTypes = require("$:/plugins/rimir/outline/block-types.js"),
 	setClass = dom.setClass,
 	focus = dom.focus,
 	isInside = dom.isInside,
@@ -337,9 +338,25 @@ methods.openTransclusion = function() {
 	if(id === -1 || this.units[id].unit.kind !== "transclusion") {
 		return false;
 	}
+	// A diagram (a tiddler of a registered typed block type) is edited in place (startTargetEdit: outline-editor.js)
+	var diagrams = this.diagramTargets(id);
+	if(diagrams.length) {
+		this.startTargetEdit(id, {title: diagrams[0].title});
+		return true;
+	}
 	this.openTarget(this.units[id].unit.target);
 	return true;
 };
+
+// The data-ol-diagram-target element (a diagram transclusion, see mapDiagrams) node is in, or null
+function diagramNodeOf(node, root) {
+	for(; node && node !== root; node = node.parentNode) {
+		if(node.getAttribute && node.getAttribute("data-ol-diagram-target")) {
+			return node;
+		}
+	}
+	return null;
+}
 
 /*
 Run adapter operation `name` on the selected unit. Returns true when a unit is selected (the key is
@@ -364,7 +381,7 @@ methods.operate = function(name, arg) {
 	if(!adapter || !adapter[name]) {
 		return true;
 	}
-	var result = adapter[name](text, this.model, id, arg);
+	var result = adapter[name](text, this.model, id, arg, blockTypes.getBlockTypes(this.wiki));
 	// Guard: never write a result that changes units the operation must leave alone
 	if(result && result.text !== text && !checkOp(this.wiki, this.model, id, name, result.text, this.tiddlerTitle, result)) {
 		return true;
@@ -562,6 +579,15 @@ methods.handleDblClick = function(event) {
 		return;
 	}
 	event.preventDefault();
+	// A diagram inside the unit: its own editor (an open editor is saved first)
+	var diagram = diagramNodeOf(node, this.domNode);
+	if(diagram) {
+		if(!this.editor || this.saveEdit()) {
+			this.select(id);
+			this.startTargetEdit(id, {title: diagram.getAttribute("data-ol-diagram-target")});
+		}
+		return;
+	}
 	// The word the double-click selected goes first (clearing it later would reset the editor's caret)
 	if(view && view.getSelection) {
 		view.getSelection().removeAllRanges();

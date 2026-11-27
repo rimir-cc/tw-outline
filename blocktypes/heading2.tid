@@ -1,0 +1,7 @@
+title: $:/plugins/rimir/outline/blocktypes/heading2
+tags: $:/tags/rimir/outline/BlockType
+name: heading2
+caption: Heading 2
+badge: h2
+behaviour: heading
+level: 2

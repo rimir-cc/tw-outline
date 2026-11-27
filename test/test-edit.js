@@ -15,6 +15,10 @@ var model = require("$:/plugins/rimir/outline/model.js"),
 describe("outline edit", function() {
 
 	function build(text) { return model.buildModel($tw.wiki, text); }
+	// Outline's own block types only: other plugins in the test wiki (graphviz, ...) add theirs
+	var OWN = require("$:/plugins/rimir/outline/block-types.js").getBlockTypes($tw.wiki).filter(function(t) {
+		return t.title.indexOf("$:/plugins/rimir/outline/blocktypes/") === 0;
+	});
 	function unit(m, pred) { return m.units.filter(pred)[0]; }
 	function idOf(m, s) {
 		// last match = innermost (a list and its only item can share a source)
@@ -95,42 +99,58 @@ describe("outline edit", function() {
 	describe("insertBlock", function() {
 		it("after a block, a list or a heading's section", function() {
 			var text = "! H\n\npara\n\n* a\n** a1\n\n! I", m = build(text);
-			expect(fmt.insertBlock(text, m, idOf(m, "para"), "heading2", "New").text).toBe("! H\n\npara\n\n!! New\n\n* a\n** a1\n\n! I");
+			expect(fmt.insertBlock(text, m, idOf(m, "para"), "heading2", "New", "after", OWN).text).toBe("! H\n\npara\n\n!! New\n\n* a\n** a1\n\n! I");
 			var list = m.units.filter(function(u) { return u.kind === "list"; })[0].id;
-			expect(fmt.insertBlock(text, m, list, "paragraph", "p2").text).toBe("! H\n\npara\n\n* a\n** a1\n\np2\n\n! I");
+			expect(fmt.insertBlock(text, m, list, "paragraph", "p2", "after", OWN).text).toBe("! H\n\npara\n\n* a\n** a1\n\np2\n\n! I");
 			// A heading: a new heading goes after its whole section, other blocks right after the heading line
-			expect(fmt.insertBlock(text, m, idOf(m, "! H"), "heading1", "G").text).toBe("! H\n\npara\n\n* a\n** a1\n\n! G\n\n! I");
-			expect(fmt.insertBlock(text, m, idOf(m, "! H"), "bulleted", "first").text).toBe("! H\n\n* first\n\npara\n\n* a\n** a1\n\n! I");
-			var r = fmt.insertBlock(text, m, idOf(m, "! I"), "code", "x\ny");
+			expect(fmt.insertBlock(text, m, idOf(m, "! H"), "heading1", "G", "after", OWN).text).toBe("! H\n\npara\n\n* a\n** a1\n\n! G\n\n! I");
+			expect(fmt.insertBlock(text, m, idOf(m, "! H"), "bulleted", "first", "after", OWN).text).toBe("! H\n\n* first\n\npara\n\n* a\n** a1\n\n! I");
+			var r = fmt.insertBlock(text, m, idOf(m, "! I"), "code", "x\ny", "after", OWN);
 			expect(r.text).toBe(text + "\n\n```\nx\ny\n```");
 			expect(r.select).toBe(text.length + 2);
 			expect(r.kind).toBe("block");
-			expect(fmt.insertBlock(text, m, idOf(m, "para"), "numbered", "n1\nn2").text).toContain("\n\n# n1<br>n2\n\n");
-			expect(fmt.insertBlock(text, m, idOf(m, "para"), "quote", "q").kind).toBe("item");
-			// Blank content, an item anchor: nothing
-			expect(fmt.insertBlock(text, m, idOf(m, "para"), "paragraph", "  ")).toBeNull();
-			expect(fmt.insertBlock(text, m, idOf(m, "* a"), "paragraph", "x")).toBeNull();
+			expect(fmt.insertBlock(text, m, idOf(m, "para"), "numbered", "n1\nn2", "after", OWN).text).toContain("\n\n# n1<br>n2\n\n");
+			expect(fmt.insertBlock(text, m, idOf(m, "para"), "quote", "q", "after", OWN).kind).toBe("item");
+			// Blank content: nothing
+			expect(fmt.insertBlock(text, m, idOf(m, "para"), "paragraph", "  ", "after", OWN)).toBeNull();
+		});
+		it("at a list item: an item type inserts a sibling, other types go before or after the whole list", function() {
+			var text = "para\n\n* a\n** a1\n* b\n\nend", m = build(text);
+			var r = fmt.insertBlock(text, m, idOf(m, "* a"), "bulleted", "new", "before", OWN);
+			expect(r.text).toBe("para\n\n* new\n* a\n** a1\n* b\n\nend");
+			expect(r.select).toBe(6);
+			expect(r.kind).toBe("item");
+			expect(fmt.insertBlock(text, m, idOf(m, "* a"), "bulleted", "new", "after", OWN).text).toBe("para\n\n* a\n** a1\n* new\n* b\n\nend");
+			// The item's own level: a numbered sibling of a sub-item keeps the parent's marker
+			expect(fmt.insertBlock(text, m, idOf(m, "** a1"), "numbered", "n", "after", OWN).text).toBe("para\n\n* a\n** a1\n*# n\n* b\n\nend");
+			expect(fmt.insertBlock(text, m, idOf(m, "** a1"), "paragraph", "p", "before", OWN).text).toBe("para\n\np\n\n* a\n** a1\n* b\n\nend");
+			expect(fmt.insertBlock(text, m, idOf(m, "* b"), "heading2", "h", "after", OWN).text).toBe("para\n\n* a\n** a1\n* b\n\n!! h\n\nend");
+			expect(fmt.insertAnchor(m, idOf(m, "** a1"), "paragraph", OWN)).toBe(m.units[idOf(m, "* a")].parent);
+			expect(fmt.insertAnchor(m, idOf(m, "** a1"), "numbered", OWN)).toBe(idOf(m, "** a1"));
 		});
 	});
 
 	describe("convert", function() {
 		function conv(text, source, type) {
 			var m = build(text), id = typeof source === "number" ? source : idOf(m, source);
-			return fmt.convert(text, m, id, type);
+			return fmt.convert(text, m, id, type, OWN);
 		}
 		it("offers the types that fit the unit", function() {
 			var text = "! H\n\npara\n\n* a\n** a1\n\n```\nc\n```\n\n<div>\n\nx\n\n</div>", m = build(text);
-			expect(fmt.convertTypes(m, idOf(m, "para"))).toEqual(["heading1", "heading2", "heading3", "bulleted", "numbered", "quote", "code"]);
-			expect(fmt.convertTypes(m, idOf(m, "! H"))).toEqual(["paragraph", "heading2", "heading3", "bulleted", "numbered", "quote", "code"]);
-			expect(fmt.convertTypes(m, idOf(m, "* a"))).toEqual(["numbered"]);
-			expect(fmt.convertTypes(m, idOf(m, "```\nc\n```"))).toEqual(["paragraph", "bulleted", "numbered", "quote"]);
+			expect(fmt.convertTypes(m, idOf(m, "para"), OWN)).toEqual(["heading1", "heading2", "heading3", "bulleted", "numbered", "quote", "quote-block", "code"]);
+			expect(fmt.convertTypes(m, idOf(m, "! H"), OWN)).toEqual(["paragraph", "heading2", "heading3", "bulleted", "numbered", "quote", "quote-block", "code"]);
+			expect(fmt.convertTypes(m, idOf(m, "* a"), OWN)).toEqual(["paragraph", "heading1", "heading2", "heading3", "numbered", "quote", "quote-block", "code"]);
+			// A sub-item: only the other item types (a block cannot sit inside a list)
+			expect(fmt.convertTypes(m, idOf(m, "** a1"), OWN)).toEqual(["numbered", "quote"]);
+			expect(fmt.convertTypes(m, idOf(m, "```\nc\n```"), OWN)).toEqual(["paragraph", "heading1", "heading2", "heading3", "bulleted", "numbered", "quote", "quote-block"]);
 			var div = m.units.filter(function(u) { return u.kind === "container"; })[0].id;
-			expect(fmt.convertTypes(m, div)).toEqual([]);
+			expect(fmt.convertTypes(m, div, OWN)).toEqual([]);
 		});
 		it("paragraphs, headings and code blocks are rewritten from their content", function() {
 			expect(conv("para\n\nnext", "para", "heading2").text).toBe("!! para\n\nnext");
 			expect(conv("! Head\n\nnext", "! Head", "paragraph").text).toBe("Head\n\nnext");
-			expect(conv("a\nb\n\nnext", "a\nb", "bulleted").text).toBe("* a<br>b\n\nnext");
+			// Several lines do not go into a one-line type
+			expect(conv("a\nb\n\nnext", "a\nb", "bulleted")).toBeNull();
 			expect(conv("line1\nline2", "line1\nline2", "code").text).toBe("```\nline1\nline2\n```");
 			expect(conv("```js\nx = 1\n```", "```js\nx = 1\n```", "paragraph").text).toBe("x = 1");
 			var r = conv("p", "p", "numbered");
@@ -139,7 +159,7 @@ describe("outline edit", function() {
 		});
 		it("a heading changes its level: only its own !s, its class stays, its section is not touched", function() {
 			var text = "!! H\n\npara\n\n!!! S\n\nx", m = build(text);
-			expect(fmt.convertTypes(m, idOf(m, "!! H"))).toEqual(["paragraph", "heading1", "heading3", "bulleted", "numbered", "quote", "code"]);
+			expect(fmt.convertTypes(m, idOf(m, "!! H"), OWN)).toEqual(["paragraph", "heading1", "heading3", "bulleted", "numbered", "quote", "quote-block", "code"]);
 			var r = conv(text, "!! H", "heading1");
 			expect(r.text).toBe("! H\n\npara\n\n!!! S\n\nx");
 			expect(r.kind).toBe("heading");
@@ -147,7 +167,7 @@ describe("outline edit", function() {
 			expect(conv(text, "!! H", "heading3").text).toBe("!!! H\n\npara\n\n!!! S\n\nx");
 			expect(conv("!!.cls H<br>two", "!!.cls H<br>two", "heading1").text).toBe("!.cls H<br>two");
 			// Deeper than the menu's levels: all three are offered
-			expect(fmt.convertTypes(build("!!!! D"), 0)).toEqual(["paragraph", "heading1", "heading2", "heading3", "bulleted", "numbered", "quote", "code"]);
+			expect(fmt.convertTypes(build("!!!! D"), 0, OWN)).toEqual(["paragraph", "heading1", "heading2", "heading3", "bulleted", "numbered", "quote", "quote-block", "code"]);
 			expect(conv("!!.cls H", "!!.cls H", "heading2")).toBeNull();
 		});
 		it("neighbours stay apart: a converted heading does not merge with the paragraph after it", function() {
@@ -172,7 +192,76 @@ describe("outline edit", function() {
 		it("types that are not offered do nothing", function() {
 			expect(conv("para", "para", "paragraph")).toBeNull();
 			expect(conv("* a", "* a", "bulleted")).toBeNull();
-			expect(conv("* a", "* a", "heading1")).toBeNull();
+			expect(conv("* a\n** b", "** b", "heading1")).toBeNull();
+		});
+		it("multi-line content turns into one-line types only while it is one line", function() {
+			var m = build("line1\nline2\n\n```\nx\ny\n```");
+			expect(fmt.convertTypes(m, idOf(m, "line1\nline2"), OWN)).toEqual(["quote-block", "code"]);
+			expect(fmt.convertTypes(m, idOf(m, "```\nx\ny\n```"), OWN)).toEqual(["paragraph", "quote-block"]);
+		});
+		it("quotes turn into the other types", function() {
+			var m = build("> q\n\n<<<\nb\n<<<\n\n<<<\nb1\nb2\n<<<");
+			expect(fmt.convertTypes(m, idOf(m, "> q"), OWN)).toEqual(["paragraph", "heading1", "heading2", "heading3", "bulleted", "numbered", "quote-block", "code"]);
+			expect(fmt.convertTypes(m, idOf(m, "<<<\nb\n<<<"), OWN)).toEqual(["paragraph", "heading1", "heading2", "heading3", "bulleted", "numbered", "quote", "code"]);
+			expect(fmt.convertTypes(m, idOf(m, "<<<\nb1\nb2\n<<<"), OWN)).toEqual(["paragraph", "code"]);
+			expect(conv("> q", "> q", "paragraph").text).toBe("q");
+			expect(conv("> q\n> r", "> q", "bulleted").text).toBe("* q\n* r");
+			expect(conv("para", "para", "quote-block").text).toBe("<<<\npara\n<<<");
+			expect(conv("<<<\nb\n<<< cite", "<<<\nb\n<<< cite", "heading2").text).toBe("!! b");
+		});
+		it("a list item becomes a block: the list splits, its sub-items move up one level below the block", function() {
+			var r = conv("* a\n* b\n** b1\n* c", "* b", "paragraph");
+			expect(r.text).toBe("* a\n\nb\n\n* b1\n\n* c");
+			expect(r.select).toBe(5);
+			expect(r.kind).toBe("block");
+			expect(conv("* a\n* b", "* a", "heading1").text).toBe("! a\n\n* b");
+			expect(conv("para\n\n* only", "* only", "code").text).toBe("para\n\n```\nonly\n```");
+			expect(conv("* x<br>y", "* x<br>y", "paragraph").text).toBe("x\ny");
+		});
+		it("the turn-into field of the unit's type narrows the list", function() {
+			var types = OWN.map(function(t) {
+				return t.name === "paragraph" ? $tw.utils.extend({}, t, {turnInto: "[[code]] [[heading1]]"}) : t;
+			}), m = build("para");
+			expect(fmt.convertTypes(m, 0, types)).toEqual(["heading1", "code"]);
+			// A filter runs over the type names
+			var byPrefix = OWN.map(function(t) {
+				return t.name === "paragraph" ? $tw.utils.extend({}, t, {turnInto: "[!prefix[heading]]"}) : t;
+			});
+			expect(fmt.convertTypes(m, 0, byPrefix)).toEqual(["bulleted", "numbered", "quote", "quote-block", "code"]);
+		});
+	});
+
+	describe("typed blocks", function() {
+		var blockTypes = require("$:/plugins/rimir/outline/block-types.js"),
+			types = OWN.concat([{name: "graphviz", caption: "Graphviz graph", badge: "graphviz",
+				behaviour: "typed", contentType: "text/vnd.graphviz", kind: "block", singleLine: false, contexts: ["block", "item"],
+				inline: "transclude", turnInto: "", make: function(c, nl) { return "$$$text/vnd.graphviz" + nl + c + nl + "$$$"; }}]),
+			GV = "$$$text/vnd.graphviz\ndigraph{}\n$$$";
+
+		it("edit without the $$$ lines", function() {
+			var m = build(GV);
+			expect(fmt.editSource(GV, m, 0, types)).toBe("digraph{}");
+			expect(fmt.replace(GV, m, 0, "x", types).text).toBe("$$$text/vnd.graphviz\nx\n$$$");
+			expect(fmt.isMultiline(m, 0, types)).toBe(true);
+		});
+
+		it("turn into and from other types", function() {
+			var m = build("para\n\n```\nc\n```\n\n$$$text/vnd.graphviz\na\nb\n$$$");
+			expect(fmt.convertTypes(m, idOf(m, "para"), types)).toContain("graphviz");
+			expect(fmt.convertTypes(m, idOf(m, "```\nc\n```"), types)).toContain("graphviz");
+			expect(fmt.convertTypes(m, idOf(m, "$$$text/vnd.graphviz\na\nb\n$$$"), types)).toEqual(["paragraph", "quote-block", "code"]);
+			expect(fmt.convert("```\nc\n```", build("```\nc\n```"), 0, "graphviz", types).text).toBe("$$$text/vnd.graphviz\nc\n$$$");
+			expect(fmt.convert(GV, build(GV), 0, "code", types).text).toBe("```\ndigraph{}\n```");
+			var text = "para", r = fmt.insertBlock(text, build(text), 0, "graphviz", "a", "after", types);
+			expect(r.text).toBe("para\n\n$$$text/vnd.graphviz\na\n$$$");
+		});
+
+		it("an unregistered typed block stays as before", function() {
+			var text = "$$$text/plain\nx\n$$$", m = build(text);
+			expect(fmt.editSource(text, m, 0, types)).toBe(text);
+			expect(fmt.convertTypes(m, 0, types)).toEqual([]);
+			expect(fmt.typedBlockType(text, m.units[0], types)).toBeNull();
+			expect(fmt.typedBlockType(GV, build(GV).units[0], types).name).toBe("graphviz");
 		});
 	});
 

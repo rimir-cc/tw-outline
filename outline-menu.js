@@ -25,42 +25,62 @@ Labels are the tiddlers $:/plugins/rimir/outline/language/block/<key>.
 \*/
 "use strict";
 
-var dom = require("$:/plugins/rimir/outline/dom-utils.js");
+var dom = require("$:/plugins/rimir/outline/dom-utils.js"),
+	blockTypes = require("$:/plugins/rimir/outline/block-types.js");
 
 var LABEL_PREFIX = "$:/plugins/rimir/outline/language/block/",
-	INSERT_TYPES = ["paragraph", "heading1", "heading2", "heading3", "bulleted", "numbered", "quote", "code"],
 	KEY = {up: 38, down: 40, home: 36, end: 35, enter: 13, escape: 27},
 	QUICK_DELETE = "$:/config/rimir/outline/quick-delete-items";
 
 var methods = {};
 
 // Block menu entries for unit `id` (-1: a tiddler without units): [{group, action: "insert"|"convert"|"edit", type, where}]
+// Insert and convert entries are labelled with the type's caption (block type tiddlers, see block-types.js)
 methods.menuEntries = function(id) {
-	var adapter = this.getAdapter(),
+	var self = this,
+		adapter = this.getAdapter(),
+		types = blockTypes.getBlockTypes(this.wiki),
+		captions = {},
 		entries = [];
 	if(!adapter) {
 		return entries;
 	}
+	types.forEach(function(t) { captions[t.name] = t.caption; });
+	var blockTypesHere = types.filter(function(t) { return t.contexts.indexOf("block") !== -1; });
 	if(id === -1) {
-		return INSERT_TYPES.map(function(type) {
-			return {group: "group-insert", action: "insert", type: type, where: "end"};
+		return blockTypesHere.map(function(t) {
+			return {group: "group-insert", action: "insert", type: t.name, text: t.caption, where: "end"};
 		});
 	}
 	var unit = this.units[id].unit;
 	if(unit.kind === "transclusion") {
 		entries.push({group: "", action: "edit", type: "edit"});
 	}
-	if(unit.kind !== "item") {
-		["after", "before"].forEach(function(where) {
-			INSERT_TYPES.forEach(function(type) {
-				entries.push({group: where === "after" ? "group-insert" : "group-insert-before", action: "insert", type: type, where: where});
-			});
-		});
+	this.diagramTargets(id).forEach(function(d) {
+		entries.push({group: "", action: "edit-target", title: d.title, text: self.label("edit-target").replace("$title$", d.title)});
+	});
+	if(unit.kind === "item") {
+		entries = entries.concat(this.addEntries());
 	}
-	adapter.convertTypes(this.model, id).forEach(function(type) {
-		entries.push({group: "group-convert", action: "convert", type: type});
+	["after", "before"].forEach(function(where) {
+		blockTypesHere.forEach(function(t) {
+			entries.push({group: where === "after" ? "group-insert" : "group-insert-before", action: "insert", type: t.name,
+				text: t.caption, where: where});
+		});
+	});
+	adapter.convertTypes(this.model, id, types).forEach(function(type) {
+		entries.push({group: "group-convert", action: "convert", type: type, text: captions[type]});
 	});
 	return entries;
+};
+
+// "Add to this item" entries: the types with the item context (a diagram tiddler or a template, see startTargetEdit)
+methods.addEntries = function() {
+	return blockTypes.getBlockTypes(this.wiki).filter(function(t) {
+		return t.contexts.indexOf("item") !== -1 && t.inline;
+	}).map(function(t) {
+		return {group: "group-add", action: "add", type: t.name, text: t.caption};
+	});
 };
 
 methods.label = function(key) {
@@ -89,6 +109,27 @@ methods.openMenu = function(opts) {
 	}
 	this.showMenu(this.selectedId, this.menuEntries(this.selectedId));
 	return true;
+};
+
+/*
+The type menu of a new, still empty editor (Alt-Enter in it): every block type. The editor closes (nothing was written)
+and opens again for the picked type at the same place; Escape opens it again as it was.
+*/
+methods.retypeMenu = function() {
+	var ed = this.editor,
+		retype = {id: ed.id, where: ed.where, blockType: ed.blockType},
+		onItem = ed.id !== -1 && this.units[ed.id] && this.units[ed.id].unit.kind === "item" && ed.where !== "end";
+	this.closeEditor(true);
+	this.closeMenu();
+	this.showMenu(retype.id, blockTypes.getBlockTypes(this.wiki).filter(function(t) {
+		return t.contexts.indexOf("block") !== -1;
+	}).map(function(t) {
+		return {group: "", action: "retype", type: t.name, text: t.caption};
+	}).concat(onItem ? this.addEntries() : []));
+	if(this.menu) {
+		this.menu.retype = retype;
+	}
+	return !!this.menu;
 };
 
 methods.deleteSelected = function() {
@@ -222,7 +263,13 @@ methods.runMenuEntry = function(index) {
 		this.select(id);
 	}
 	dom.focus(this.domNode);
-	if(reedit) {
+	if(entry.action === "add") {
+		this.startTargetEdit(id, {isNew: true, typeName: entry.type});
+	} else if(entry.action === "edit-target") {
+		this.startTargetEdit(id, {title: entry.title});
+	} else if(menu.retype) {
+		this.startEdit(menu.retype.id, {isNew: true, blockType: entry.type, where: menu.retype.where});
+	} else if(reedit) {
 		this.operate("convert", entry.type);
 		this.editAgain(reedit.caret);
 	} else if(entry.action === "cancel") {
@@ -250,9 +297,12 @@ methods.handleMenuKeydown = function(event) {
 		case KEY.end: this.setMenuActive(menu.entries.length - 1); return true;
 		case KEY.enter: this.runMenuEntry(menu.active); return true;
 		case KEY.escape:
-			var reedit = menu.reedit;
+			var reedit = menu.reedit,
+				retype = menu.retype;
 			this.closeMenu();
-			if(reedit) {
+			if(retype) {
+				this.startEdit(retype.id, {isNew: true, blockType: retype.blockType, where: retype.where});
+			} else if(reedit) {
 				this.editAgain(reedit.caret);
 			}
 			return true;

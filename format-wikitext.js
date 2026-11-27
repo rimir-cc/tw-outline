@@ -9,7 +9,8 @@ Wikitext adapter: indent, promote, move, replace, insertNew, remove, deleteUnit,
 "use strict";
 
 var utils = require("$:/plugins/rimir/outline/text-utils.js"),
-	outlineModel = require("$:/plugins/rimir/outline/model.js");
+	outlineModel = require("$:/plugins/rimir/outline/model.js"),
+	blockTypes = require("$:/plugins/rimir/outline/block-types.js");
 
 exports.types = ["text/vnd.tiddlywiki", ""];
 
@@ -215,15 +216,35 @@ function isOneLine(u) {
 	return u.kind === "item" || u.kind === "heading";
 }
 
-function toBreaks(source) {
-	return source.replace(/^(?:[ \t]*\r?\n)+|(?:\r?\n[ \t]*)+$/g, "").replace(/[ \t]*\r?\n/g, "<br>");
-}
+var toBreaks = utils.toBreaks;
+
+/*
+The registered typed type of block unit `u` ($$$<content-type> ... $$$, a type with that content-type in `types`), or
+null. An unregistered typed block is a plain block.
+*/
+exports.typedBlockType = function(text, u, types) {
+	if(!u || u.kind !== "block") { return null; }
+	var source = text.substring(u.start, u.end),
+		m = /^\$\$\$([^\r\n]+)\r?\n[\s\S]*\r?\n\$\$\$[ \t]*$/.exec(source);
+	if(!m) { return null; }
+	var contentType = m[1].trim();
+	types = types || blockTypes.getBlockTypes($tw.wiki);
+	for(var i = 0; i < types.length; i++) {
+		if(types[i].behaviour === "typed" && types[i].contentType === contentType) { return types[i]; }
+	}
+	return null;
+};
 
 /*
 Fence lines of a code block (```lang ... ```) or a <<< quote block (<<<class ... <<< citation) that the editor
 leaves out: {open, content, close} (content lines joined by \n), or null for other units.
 */
-function fenced(text, u) {
+function fenced(text, u, types) {
+	var typed = exports.typedBlockType(text, u, types);
+	if(typed) {
+		var tl = text.substring(u.start, u.end).split(/\r?\n/);
+		return {open: tl[0], content: tl.slice(1, -1).join("\n"), close: tl[tl.length - 1]};
+	}
 	var fence = u.tag === "codeblock" ? /^```/ : (u.kind === "block" && u.tag === "blockquote" ? /^<<</ : null),
 		lines = fence ? text.substring(u.start, u.end).split(/\r?\n/) : [];
 	if(lines.length < 2 || !fence.test(lines[0]) || !fence.test(lines[lines.length - 1])) {
@@ -253,11 +274,11 @@ function quote(source, nl) {
 }
 
 // Replace the unit's content (see contentStart, fenced, isQuoteList) with newSource
-exports.replace = function(text, model, id, newSource) {
+exports.replace = function(text, model, id, newSource, types) {
 	var u = model.units[id];
 	if(!u) { return null; }
 	var nl = utils.eol(text),
-		f = fenced(text, u);
+		f = fenced(text, u, types);
 	if(f) {
 		return {text: utils.splice(text, u.start, u.end, f.open + nl + newSource + nl + f.close), select: u.start};
 	}
@@ -331,42 +352,53 @@ function insertBlockBefore(text, u, source) {
 	return {text: utils.splice(text, u.start, u.start, lead + source + nl + nl), select: u.start + lead.length};
 }
 
-/*
-Block types of the block menu (Alt-Enter): the unit kind they produce and their source from content (line breaks `nl`).
-Headings, list items and quote lines are one source line: their line breaks become <br>.
-*/
-var BLOCK_TYPES = {
-	paragraph: {kind: "block", make: function(c) { return c; }},
-	heading1: {kind: "heading", make: function(c) { return "! " + toBreaks(c); }},
-	heading2: {kind: "heading", make: function(c) { return "!! " + toBreaks(c); }},
-	heading3: {kind: "heading", make: function(c) { return "!!! " + toBreaks(c); }},
-	bulleted: {kind: "item", make: function(c) { return "* " + toBreaks(c); }},
-	numbered: {kind: "item", make: function(c) { return "# " + toBreaks(c); }},
-	quote: {kind: "item", make: function(c) { return "> " + toBreaks(c); }},
-	code: {kind: "block", make: function(c, nl) { return "```" + nl + c + nl + "```"; }}
-};
+// Block type `name` of `types` (default: the registry of $tw.wiki, see block-types.js), or null
+function typeOf(name, types) {
+	types = types || blockTypes.getBlockTypes($tw.wiki);
+	for(var i = 0; i < types.length; i++) {
+		if(types[i].name === name) { return types[i]; }
+	}
+	return null;
+}
 
 // Unit kind a block type produces ("item" for list types), or null
-exports.blockTypeKind = function(type) {
-	return BLOCK_TYPES[type] ? BLOCK_TYPES[type].kind : null;
+exports.blockTypeKind = function(type, types) {
+	var t = typeOf(type, types);
+	return t ? t.kind : null;
+};
+
+/*
+The unit a new block of `type` is placed next to when inserted at unit `id`: for a list item and a type that is not an
+item type, the outermost list around it (a block cannot sit inside a list); otherwise `id` itself.
+*/
+exports.insertAnchor = function(model, id, type, types) {
+	var u = model.units[id];
+	if(!u || u.kind !== "item" || exports.blockTypeKind(type, types) === "item") {
+		return id;
+	}
+	while(u.parent !== -1 && (model.units[u.parent].kind === "list" || model.units[u.parent].kind === "item")) {
+		u = model.units[u.parent];
+	}
+	return u.id;
 };
 
 /*
 Where insertBlock puts a new block of `type` after unit `id`: right after a heading's own line for a non-heading
 block (it becomes the first block of the section), otherwise after the unit's whole subtree.
 */
-exports.insertsAfterSubtree = function(model, id, type) {
+exports.insertsAfterSubtree = function(model, id, type, types) {
 	var u = model.units[id];
-	return !!u && !(u.kind === "heading" && exports.blockTypeKind(type) !== "heading");
+	return !!u && !(u.kind === "heading" && exports.blockTypeKind(type, types) !== "heading");
 };
 
 /*
 Insert a new block of `type` with `content`. `where`: "after" (default) unit `id` (see insertsAfterSubtree), "before"
-it (it ends the section above), or "end" of the text (`id` is ignored: the first block of an empty tiddler). Not
-next to a single list item. Null for blank content.
+it (it ends the section above), or "end" of the text (`id` is ignored: the first block of an empty tiddler). At a list
+item an item type inserts a sibling (the item's marker with the type's marker character last); other types go before
+or after the whole list (insertAnchor). Null for blank content.
 */
-exports.insertBlock = function(text, model, id, type, content, where) {
-	var u = model.units[id], t = BLOCK_TYPES[type];
+exports.insertBlock = function(text, model, id, type, content, where, types) {
+	var t = typeOf(type, types), u;
 	if(!t || !content || !content.trim()) { return null; }
 	var nl = utils.eol(text), result;
 	content = content.replace(/\r?\n/g, nl);
@@ -374,20 +406,31 @@ exports.insertBlock = function(text, model, id, type, content, where) {
 		var head = text.replace(/\s+$/, ""),
 			prefix = /\S/.test(head) ? head + nl + nl : "";
 		result = {text: prefix + t.make(content, nl), select: prefix.length};
-	} else if(!u || u.kind === "item") {
+		result.kind = t.kind;
+		return result;
+	}
+	u = model.units[exports.insertAnchor(model, id, type, types)];
+	if(!u) {
 		return null;
+	}
+	if(u.kind === "item") {
+		var line = u.marker.substring(0, u.marker.length - 1) + t.marker + " " + toBreaks(content);
+		result = where === "before" ?
+			{text: utils.splice(text, u.start, u.start, line + nl), select: u.start} :
+			{text: utils.splice(text, u.subtreeEnd, u.subtreeEnd, nl + line), select: u.subtreeEnd + nl.length};
 	} else if(where === "before") {
 		result = insertBlockBefore(text, u, t.make(content, nl));
 	} else {
-		result = insertBlockAt(text, exports.insertsAfterSubtree(model, id, type) ? u.subtreeEnd : u.end, t.make(content, nl));
+		result = insertBlockAt(text, exports.insertsAfterSubtree(model, u.id, type, types) ? u.subtreeEnd : u.end, t.make(content, nl));
 	}
 	result.kind = t.kind;
 	return result;
 };
 
-// Content of a paragraph, heading or code block (line breaks as \n, <br> of headings too), or null for other units
-function blockContent(text, u) {
-	if(u.kind === "heading") {
+// Content of a paragraph, heading, list item, code block or <<< quote block (line breaks as \n, the <br> of headings
+// and items too), or null for other units
+function blockContent(text, u, types) {
+	if(u.kind === "heading" || u.kind === "item") {
 		return text.substring(contentStart(text, u), u.end).replace(/<br\s*\/?>/gi, "\n");
 	}
 	if(u.kind !== "block") {
@@ -397,32 +440,68 @@ function blockContent(text, u) {
 	if(u.tag === "p") {
 		return source;
 	}
-	var f = u.tag === "codeblock" ? fenced(text, u) : null;
+	var f = fenced(text, u, types);
 	return f ? f.content : null;
 }
 
+// The registered type unit `u` is of (its level, marker character, fence lines), or null
+function unitBlockType(text, u, types) {
+	var f = u.kind === "block" ? fenced(text, u, types) : null,
+		last = u.marker ? u.marker.charAt(u.marker.length - 1) : "";
+	for(var i = 0; i < types.length; i++) {
+		var t = types[i];
+		if((u.kind === "heading" && t.kind === "heading" && t.level === u.level) ||
+			(u.kind === "item" && t.kind === "item" && t.marker === last) ||
+			(u.kind === "block" && u.tag === "p" && t.behaviour === "paragraph") ||
+			(f && t.behaviour === "fenced" && f.open.indexOf(t.open) === 0 && f.close.indexOf(t.close) === 0) ||
+			(f && t.behaviour === "typed" && f.open === "$$$" + t.contentType)) {
+			return t;
+		}
+	}
+	return null;
+}
+
+// Item types other than the one with marker character `last`
+function otherItemTypes(types, last) {
+	return types.filter(function(t) { return t.kind === "item" && t.marker !== last; });
+}
+
 /*
-The "Turn into" types offered for unit `id`: a bullet switches between bulleted and numbered, a whole list too;
-paragraphs, headings and code blocks turn into the other block types (a heading also into another level). The current
-type is left out.
+The "Turn into" types offered for unit `id`, in registry order. Everything turns into everything else, except:
+- a multi-line unit (paragraph, fenced, typed) turns into a one-line type (heading, item) only while its content is one
+  line;
+- a sub-item and a whole list only switch between the item types (a block cannot sit inside a list);
+- units without content (containers, tables, widgets, transclusions) turn into nothing.
+The turn-into filter of the unit's own type narrows the result.
 */
-exports.convertTypes = function(model, id) {
+exports.convertTypes = function(model, id, types) {
 	var u = model.units[id];
+	types = types || blockTypes.getBlockTypes($tw.wiki);
 	if(!u) { return []; }
-	if(u.kind === "item") {
-		var last = u.marker.charAt(u.marker.length - 1);
-		return last === "*" ? ["numbered"] : last === "#" ? ["bulleted"] : [];
-	}
+	var text = model.text, result;
 	if(u.kind === "list") {
-		return u.tag === "ul" ? ["numbered"] : u.tag === "ol" ? ["bulleted"] : [];
+		var first = u.children.length ? model.units[u.children[0]] : null;
+		result = first ? otherItemTypes(types, first.marker.charAt(first.marker.length - 1)) : [];
+		return result.map(function(t) { return t.name; });
 	}
-	var text = model.text;
-	if(blockContent(text, u) === null) { return []; }
-	var all = u.tag === "codeblock" ? ["paragraph", "bulleted", "numbered", "quote"] :
-		["paragraph", "heading1", "heading2", "heading3", "bulleted", "numbered", "quote", "code"];
-	return all.filter(function(type) {
-		return !(type === "paragraph" && u.tag === "p") && !(u.kind === "heading" && type === "heading" + u.level);
-	});
+	var content = blockContent(text, u, types);
+	if(content === null) { return []; }
+	var own = unitBlockType(text, u, types),
+		oneLine = u.kind === "heading" || u.kind === "item" || !/\n/.test(content.replace(/\s+$/, ""));
+	if(u.kind === "item" && u.level > 1) {
+		result = otherItemTypes(types, u.marker.charAt(u.marker.length - 1));
+	} else {
+		result = types.filter(function(t) {
+			return t !== own && !(u.kind === "heading" && t.kind === "heading" && t.level === u.level) &&
+				!(t.singleLine && !oneLine);
+		});
+	}
+	var names = result.map(function(t) { return t.name; });
+	if(own && own.turnInto) {
+		var allowed = $tw.wiki.filterTiddlers(own.turnInto, null, $tw.wiki.makeTiddlerIterator(names));
+		names = names.filter(function(name) { return allowed.indexOf(name) !== -1; });
+	}
+	return names;
 };
 
 // True when unit u has `count` list neighbours (the previous and next unit at its level, by document order) to join
@@ -436,13 +515,13 @@ function joinsNeighbours(model, u, count) {
 	return lists >= count;
 }
 
-// Replace the * or # at marker position `index` (-1: every position) with `ch` in `items`; null when nothing changes
+// Replace the *, # or > at marker position `index` (-1: every position) with `ch` in `items`; null when nothing changes
 function switchMarkers(text, items, index, ch) {
 	var edits = [];
 	items.forEach(function(it) {
 		for(var i = 0; i < it.marker.length; i++) {
 			var c = it.marker.charAt(i);
-			if((index === -1 || i === index) && (c === "*" || c === "#") && c !== ch) {
+			if((index === -1 || i === index) && (c === "*" || c === "#" || c === ">") && c !== ch) {
 				edits.push(it.start + i);
 			}
 		}
@@ -461,29 +540,69 @@ function subtreeItems(model, u) {
 }
 
 /*
-Turn unit `id` into block type `type` (see convertTypes). A bullet switches with all its siblings of the same level
-(one list type per level; their sub-items follow at that marker position). A whole list switches at all levels.
-A heading that changes its level keeps its line apart from the !s. Other units are rewritten from their content and
-set apart by blank lines. The result is parsed again: it must
-yield a unit of the new kind at the unit's place and no other change in the unit count, otherwise null.
+A top-level list item turned into block `source`: the list splits around it, its sub-items stay a list right below
+the block, one level up. Returns {text, start} (start: where the block begins).
 */
-exports.convert = function(text, model, id, type) {
-	var u = model.units[id];
-	if(!u || exports.convertTypes(model, id).indexOf(type) === -1) { return null; }
-	var ch = type === "numbered" ? "#" : "*", newText, kind = u.kind, start = u.start, nl = utils.eol(text);
-	if(u.kind === "item") {
-		var sibs = (u.parent === -1 ? model.roots : model.units[u.parent].children).map(function(i) { return model.units[i]; })
-			.filter(function(x) { return x.kind === "item" && x.level === u.level; }),
-			items = [];
-		sibs.forEach(function(x) { items = items.concat(subtreeItems(model, x)); });
-		newText = switchMarkers(text, items, u.level - 1, ch);
-	} else if(u.kind === "list") {
-		newText = switchMarkers(text, subtreeItems(model, u), -1, ch);
-	} else if(u.kind === "heading" && BLOCK_TYPES[type].kind === "heading") {
+function itemToBlock(text, model, u, source) {
+	var list = model.units[u.parent],
+		nl = utils.eol(text),
+		before = text.substring(list.start, u.start).replace(/\s+$/, ""),
+		after = text.substring(u.subtreeEnd, list.end).replace(/^\s+/, ""),
+		subs = subtreeItems(model, u).filter(function(x) { return x !== u; }),
+		promoted = "";
+	if(subs.length) {
+		var sub = text.substring(u.end, u.subtreeEnd).replace(/^\r?\n/, ""),
+			offset = text.indexOf(sub, u.end);
+		// Drop the first marker character of every sub-item line, from the end backwards
+		subs.slice().reverse().forEach(function(x) {
+			sub = utils.splice(sub, x.start - offset, x.start - offset + 1, "");
+		});
+		promoted = sub;
+	}
+	var parts = [], start = list.start;
+	if(before) {
+		parts.push(before);
+		start += before.length + 2 * nl.length;
+	}
+	parts.push(source);
+	if(promoted) { parts.push(promoted); }
+	if(after) { parts.push(after); }
+	return {text: utils.splice(text, list.start, list.end, parts.join(nl + nl)), start: start};
+}
+
+/*
+Turn unit `id` into block type `type` (see convertTypes). Item types: a bullet switches with all its siblings of the
+same level (one list type per level; their sub-items follow at that marker position), a whole list at all levels.
+A heading that changes its level keeps its line apart from the !s. A top-level item that becomes a block leaves its
+list (itemToBlock). Other units are rewritten from their content and set apart by blank lines. The result is parsed
+again: it must yield a unit of the new kind at the unit's place (and, for a rewritten unit, no other change in the unit
+count), otherwise null.
+*/
+exports.convert = function(text, model, id, type, types) {
+	var u = model.units[id], t = typeOf(type, types);
+	if(!u || !t || exports.convertTypes(model, id, types).indexOf(type) === -1) { return null; }
+	var newText, kind = u.kind, start = u.start, nl = utils.eol(text), checkCount = true;
+	if((u.kind === "item" || u.kind === "list") && t.kind === "item") {
+		if(u.kind === "item") {
+			var sibs = (u.parent === -1 ? model.roots : model.units[u.parent].children).map(function(i) { return model.units[i]; })
+				.filter(function(x) { return x.kind === "item" && x.level === u.level; }),
+				items = [];
+			sibs.forEach(function(x) { items = items.concat(subtreeItems(model, x)); });
+			newText = switchMarkers(text, items, u.level - 1, t.marker);
+		} else {
+			newText = switchMarkers(text, subtreeItems(model, u), -1, t.marker);
+		}
+	} else if(u.kind === "heading" && t.kind === "heading") {
 		// Another level: only the heading's own !s change (its class and content stay, its section is not touched)
-		newText = utils.splice(text, u.start, u.start + u.level, BLOCK_TYPES[type].make("").replace(/ $/, ""));
+		newText = utils.splice(text, u.start, u.start + u.level, t.make("").replace(/ $/, ""));
+	} else if(u.kind === "item") {
+		var moved = itemToBlock(text, model, u, t.make(blockContent(text, u, types).replace(/\n/g, nl), nl));
+		newText = moved.text;
+		start = moved.start;
+		kind = t.kind;
+		checkCount = false;
 	} else {
-		var source = BLOCK_TYPES[type].make(blockContent(text, u).replace(/\n/g, nl), nl),
+		var source = t.make(blockContent(text, u, types).replace(/\n/g, nl), nl),
 			before = text.substring(0, u.start),
 			after = text.substring(u.end),
 			breaksBefore = (/(?:\r?\n[ \t]*)*$/.exec(before)[0].match(/\n/g) || []).length,
@@ -496,7 +615,7 @@ exports.convert = function(text, model, id, type) {
 			source += nl;
 		}
 		newText = utils.splice(text, u.start, u.end, source);
-		kind = BLOCK_TYPES[type].kind;
+		kind = t.kind;
 	}
 	if(newText === null || newText === text) { return null; }
 	// A block that becomes a list item also gets its list unit, unless it joins a list right above or below it (TW
@@ -505,7 +624,7 @@ exports.convert = function(text, model, id, type) {
 		toItem = kind === "item" && u.kind !== "item" && u.kind !== "list",
 		expected = model.units.length + (toItem ? 1 : 0),
 		joined = toItem ? expected - parsed.units.length : 0;
-	if((joined !== 0 && !(joined > 0 && joined <= 2 && joinsNeighbours(model, u, joined))) ||
+	if((checkCount && joined !== 0 && !(joined > 0 && joined <= 2 && joinsNeighbours(model, u, joined))) ||
 		outlineModel.findUnit(parsed, start, kind) === -1) {
 		return null;
 	}
@@ -782,12 +901,12 @@ exports.merge = function(text, model, id, content) {
 	};
 };
 
-// What the editor shows: the unit's content, without an item marker or heading prefix, a code block's or <<< quote's
-// fence lines, a whole quote's ">"s; <br> in items and headings as line breaks
-exports.editSource = function(text, model, id) {
+// What the editor shows: the unit's content, without an item marker or heading prefix, a code block's, <<< quote's or
+// registered typed block's fence lines, a whole quote's ">"s; <br> in items and headings as line breaks
+exports.editSource = function(text, model, id, types) {
 	var u = model.units[id];
 	if(!u) { return ""; }
-	var f = fenced(text, u);
+	var f = fenced(text, u, types);
 	if(f) {
 		return f.content;
 	}

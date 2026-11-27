@@ -100,6 +100,18 @@ The editor edits a unit's content. The list marker and the heading level are str
 
 Shift-Enter in the editor. In wikitext a list item (and a heading) is one source line, and a real line break would end it: the next line would become a paragraph that swallows the following items. So line breaks in items and headings are saved as `<br>`, and an existing `<br>` shows as a line break when you edit. Enter stays //save and new item//. Paragraphs and other blocks keep real line breaks.
 
+!! Why can't a paragraph of several lines become a heading or a bullet?
+
+A heading and a list item are one source line. Several lines would have to be squeezed into one with `<br>`, which changes the text more than a type switch should. Join the lines first, or turn it into a quote block or code block.
+
+!! How do I add Graphviz or Mermaid diagrams?
+
+Install rimir/graphviz or rimir/mermaid. Each registers a block type: //Insert after → Graphviz graph// writes a `$$$text/vnd.graphviz` block, and on a bullet //Add to this item → Graphviz graph// creates a graph tiddler and transcludes it in the item. A double-click on the graph edits its source in place.
+
+!! How does another plugin add a block type?
+
+With one tiddler tagged `$:/tags/rimir/outline/BlockType` (see the reference: block types). For a content type with its own parser, `behaviour: typed` and `content-type` are enough; `contexts: block item` and `inline: transclude` add it to bullets as a transcluded tiddler.
+
 !! Why does switching one bullet to numbered switch its neighbours too?
 
 In wikitext the list type is the marker character, and items of one level with different characters do not form one list: one numbered item among bullets would cut the list into three. So //Turn into// switches all items of that level under the same parent; their sub-items keep their own type.

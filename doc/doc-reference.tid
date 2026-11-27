@@ -154,13 +154,35 @@ Enter with the caret at the very start of a filled list item or paragraph saves 
 
 Insert before offers the same types as Insert after and puts the block directly above the selected unit (it ends the section above; above a list or a lower heading this is the way to put a heading in front of it). Turning a heading into another level (Heading 1 to 3) changes only its own `!`s: its class and text stay, the headings of its section keep their levels (Tab / Shift-Tab change the whole section, also to levels 4 to 6). Turning a paragraph or heading into a bulleted or numbered item next to a list of that type joins that list (TW continues a list over blank lines).
 
+Turn into: everything turns into everything, with one rule: a multi-line unit (paragraph, code block, quote block, typed block) turns into a one-line type (heading, list item, quote line) only while its content is one line. A list item with `<br>`s is one line; turned into a block its `<br>`s become line breaks. The `turn-into` field of a type narrows the list.
+
 |!Selected |!Insert after / before |!Turn into |
-|Paragraph |Paragraph, Heading 1–3, Bulleted/Numbered list, Quote, Code block |Heading 1–3, Bulleted/Numbered list, Quote, Code block |
-|Heading |the same (a heading goes after the section, other blocks right below the heading) |Paragraph, Bulleted/Numbered list, Quote, Code block |
-|Code block |the same |Paragraph, Bulleted/Numbered list, Quote |
-|Whole list |the same |Bulleted ↔ Numbered (all levels) |
-|List item |– |Bulleted ↔ Numbered (with all its siblings of that level) |
-|Transclusion |the same, plus //Edit this line// first |– |
+|Paragraph, code block, quote block, typed block |every type with the `block` context |every other type (one-line types only for one-line content) |
+|Heading |the same (a heading goes after the section, other blocks right below the heading) |every other type; its section joins the section above |
+|Top-level list item |item types: a sibling with the item's marker (Insert before on the first item: a new first bullet); other types: before / after the whole list. Plus //Add to this item// |every other type: as a block it leaves its list (the list splits, its sub-items stay a list below it, one level up) |
+|Sub-item |the same |the other item types (with all its siblings of that level) |
+|Whole list |the same |the other item types (all levels) |
+|Transclusion |the same, plus //Edit this line// first (a diagram: //Edit <title>//) |– |
+
+!! Block types
+
+The block menu, Turn into and the badges of new blocks follow the tiddlers tagged `$:/tags/rimir/outline/BlockType`, in tag order (the tag tiddler's `list`, `list-before` / `list-after` on a type). Outline ships its types as shadows under `$:/plugins/rimir/outline/blocktypes/`; override one to rename it (`caption`), or remove its tag to hide it. A tiddler with missing fields is skipped.
+
+|!Field |!Meaning |
+|`name` |Key, unique |
+|`caption` |Menu label |
+|`badge` |Badge of a new block's editor field and of typed blocks of the type |
+|`behaviour` |`paragraph`, `heading` (`level` 1–6), `item` (`marker` `*`, `#` or `>`), `fenced` (`open`, `close` lines), `typed` (`content-type`: a `$$$<content-type>` … `$$$` block) |
+|`starter` |Text a new block or diagram starts with |
+|`contexts` |`block` (insert before / after blocks) and / or `item` (//Add to this item//); default `block` |
+|`inline` |For the `item` context: `transclude` (a new tiddler of `content-type`, transcluded) or a template with `$content$`, e.g. `<<pill "$content$">>` |
+|`turn-into` |Filter over type names: the types a unit of this type may turn into |
+
+Overriding a built-in type's `badge` changes only its new-block editor field; units on the page keep their badge from the rendered element.
+
+!! Add to this item and diagram editing
+
+On a list item, //Add to this item// lists the types with the `item` context. A `transclude` type opens a code field below the item with the type's starter text; nothing is written until Ctrl-Enter, which creates the tiddler `<item text> (<badge>)` (plain text, at most about 40 characters; the host title for an item without text; made unique) of the type's content type and appends `{{title}}` to the item's line (Ctrl-Z removes the reference, the tiddler stays). A template type appends the filled template. Escape writes nothing. A transcluded diagram (inline in a unit, or a block-level transclusion line) opens the same field on its tiddler's text: double-click, Enter on the line, or //Edit <title>// in the block menu; Ctrl-Enter saves into that tiddler, Escape discards. The field has the orange frame of another tiddler's content; only Ctrl-Enter and Escape are outline keys in it.
 
 !! State and config
 

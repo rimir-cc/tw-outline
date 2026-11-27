@@ -1,0 +1,8 @@
+title: $:/plugins/rimir/outline/blocktypes/code
+tags: $:/tags/rimir/outline/BlockType
+name: code
+caption: Code block
+badge: code-block
+behaviour: fenced
+open: ```
+close: ```

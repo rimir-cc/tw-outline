@@ -14,9 +14,19 @@ tags: $:/tags/Stylesheet
 	outline-offset: 2px;
 }
 
-/* A selected transclusion ({{...}}, <$transclude>): its content belongs to another tiddler */
+/* Another tiddler's content: a selected transclusion ({{...}}, <$transclude>) and the editor of a diagram or of a
+   template's content (outline-editor startTargetEdit) */
+.rr-ol {
+	--rr-ol-other-tiddler: #e8800c;
+}
+
 .rr-ol-selected[data-ol-kind="transclusion"] {
-	outline-color: #e8800c;
+	outline-color: var(--rr-ol-other-tiddler);
+}
+
+.rr-ol-target-editor {
+	outline: 1px solid var(--rr-ol-other-tiddler);
+	outline-offset: 2px;
 }
 
 /* A selected list item with sub-items: the frame is drawn by .rr-ol-selbox around the item's own lines only */
@@ -367,6 +377,7 @@ td.rr-ol-keys-key {
 }
 
 .rr-ol-badges-all pre[data-ol-type]::after,
+.rr-ol-badges-all [data-ol-typed]::after,
 .rr-ol-badges-all .rr-ol-editor-host[data-ol-type="code-block"]::after {
 	left: auto;
 	right: 3px;

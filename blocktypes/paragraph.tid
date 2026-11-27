@@ -1,0 +1,6 @@
+title: $:/plugins/rimir/outline/blocktypes/paragraph
+tags: $:/tags/rimir/outline/BlockType
+name: paragraph
+caption: Paragraph
+badge: paragraph
+behaviour: paragraph
