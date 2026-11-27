@@ -58,6 +58,7 @@ var ACTIONS = [
 	// Escape: clears the selection; with nothing selected the outline goes idle
 	{name: "outline-clear", run: function(w) { return w.clearSelection() || w.sleep(); }},
 	{name: "outline-open", run: function(w) { return w.openTransclusion(); }},
+	{name: "outline-open-story", run: function(w) { return w.openTransclusion(true); }},
 	{name: "outline-edit", run: function(w) { return w.editSelected(); }},
 	{name: "outline-add", run: function(w) { return w.addBelow(); }},
 	{name: "outline-menu", run: function(w) { return w.openMenu(); }},
@@ -426,24 +427,40 @@ methods.lastSelectable = function() {
 
 /* ---------- operations ---------- */
 
-// Shift-Enter (outline-open): open the tiddler the selected unit transcludes in outline mode (openTarget: outline-editor.js)
-methods.openTransclusion = function() {
-	var id = this.selectedId;
-	if(id === -1) {
-		return false;
-	}
-	var unit = this.units[id].unit,
-		target = unit.kind === "transclusion" ? unit.target : firstTransclusion(this.model.text.substring(unit.start, unit.end)),
+// Shift-Enter (outline-open): the tiddler the selected unit transcludes in an overlay (a diagram: its source in place);
+// Ctrl-Shift-Enter (outline-open-story, inStory): in the story, in outline mode (openTarget: outline-editor.js)
+methods.openTransclusion = function(inStory) {
+	var id = this.selectedId,
+		target = id === -1 ? null : this.transcludedTitle(id),
 		tiddler = target ? this.wiki.getTiddler(target) : null;
 	if(!target) {
 		return false;
 	}
-	// A diagram (a tiddler of a registered typed block type) is edited in place (startTargetEdit: outline-editor.js)
-	if(tiddler && blockTypes.typeForContentType(this.wiki, tiddler.fields.type) && this.startTargetEdit(id, {title: target})) {
-		return true;
+	// A field, index or template transclusion shows part of the tiddler: it opens in the story
+	if(!inStory && !this.transcludesPart(id)) {
+		// An overlay over the unit (outline-overlay.js): the tiddler's own outline, a diagram's source with a preview
+		if(this.openOverlay(id, target)) {
+			return true;
+		}
 	}
 	this.openTarget(target);
 	return true;
+};
+
+// True when the (first) transclusion of unit `id` names a field, an index or a template ({{X!!f}}, {{X##i}},
+// {{X||T}}, <$transclude $field=... / $index=...>)
+methods.transcludesPart = function(id) {
+	var unit = this.units[id].unit,
+		source = this.model.text.substring(unit.start, unit.end),
+		braces = /\{\{[^{}|]+?(!!|##|\|\|)/.exec(source),
+		widget = /<\$transclude\b[^>]*?\s\$?(?:field|index)=/.exec(source);
+	return !!(braces && (!widget || braces.index < widget.index)) || !!(widget && !braces);
+};
+
+// The tiddler unit `id` transcludes: a transclusion unit's target, or the first transclusion in its source; or null
+methods.transcludedTitle = function(id) {
+	var unit = this.units[id].unit;
+	return unit.kind === "transclusion" ? unit.target : firstTransclusion(this.model.text.substring(unit.start, unit.end));
 };
 
 // Title of the first transclusion in `source` ({{title}}, {{title!!field}}, {{title||template}}, or a transclude widget
@@ -722,6 +739,14 @@ its unit and focuses the container. Clicks inside the editor host are left to th
 */
 methods.handleClick = function(event) {
 	var node = event.target;
+	// Clicks inside this outline's overlay belong to the overlay's own outline; a click outside it closes it (not with
+	// changes in it)
+	if(this.inOverlay(node)) {
+		return;
+	}
+	if(this.overlay) {
+		this.closeOverlay();
+	}
 	if(!this.awake) {
 		if(!(event.ctrlKey || event.metaKey) || inControl(node, this.domNode)) {
 			return;
@@ -782,7 +807,7 @@ saved first. Not inside the editor, not on links, buttons or inputs; the word th
 */
 methods.handleDblClick = function(event) {
 	var node = event.target;
-	if(!this.awake || (this.editor && this.editor.host && isInside(node, this.editor.host))) {
+	if(!this.awake || this.inOverlay(node) || (this.editor && this.editor.host && isInside(node, this.editor.host))) {
 		return;
 	}
 	if(isEditable(node) || inControl(node, this.domNode)) {
@@ -799,7 +824,7 @@ methods.handleDblClick = function(event) {
 	if(diagram) {
 		if(!this.editor || this.saveEdit()) {
 			this.select(id);
-			this.startTargetEdit(id, {title: diagram.getAttribute("data-ol-diagram-target")});
+			this.openOverlay(id, diagram.getAttribute("data-ol-diagram-target"));
 		}
 		return;
 	}

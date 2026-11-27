@@ -25,6 +25,70 @@ tags: $:/tags/Stylesheet
 	outline-color: var(--rr-ol-other-tiddler);
 }
 
+/* Transclusion overlay (outline-overlay.js): the transcluded tiddler's own outline over the unit */
+.rr-ol-overlay {
+	position: absolute;
+	left: -0.5em;
+	right: -0.5em;
+	z-index: 20;
+	padding: 0 0.5em 0.4em 0.5em;
+	border: 1px solid var(--rr-ol-other-tiddler);
+	border-radius: 4px;
+	background: <<colour tiddler-background>>;
+	box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.rr-ol-overlay-bar {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	display: flex;
+	align-items: center;
+	gap: 0.5em;
+	margin: 0 -0.5em 0.3em -0.5em;
+	padding: 0.15em 0.5em;
+	border-bottom: 1px solid <<colour tiddler-border>>;
+	background: <<colour tiddler-background>>;
+	font-size: 0.8em;
+	color: <<colour muted-foreground>>;
+}
+
+.rr-ol-overlay-title {
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--rr-ol-other-tiddler);
+}
+
+.rr-ol-overlay-hint {
+	white-space: nowrap;
+}
+
+/* A diagram's overlay: its source above, a live preview below */
+.rr-ol-overlay-code {
+	display: block;
+	width: 100%;
+	box-sizing: border-box;
+	font-family: monospace;
+	font-size: 0.9em;
+}
+
+.rr-ol-overlay-preview {
+	margin-top: 0.4em;
+	padding-top: 0.4em;
+	border-top: 1px dashed <<colour tiddler-border>>;
+}
+
+.rr-ol-overlay-button {
+	padding: 0 0.3em;
+	color: <<colour muted-foreground>>;
+}
+
+.rr-ol-overlay-button:hover {
+	color: <<colour foreground>>;
+}
+
 .rr-ol-target-editor {
 	outline: 1px solid var(--rr-ol-other-tiddler);
 	outline-offset: 2px;

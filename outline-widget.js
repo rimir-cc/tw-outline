@@ -30,6 +30,7 @@ var Widget = require("$:/core/modules/widgets/widget.js").widget,
 	menu = require("$:/plugins/rimir/outline/outline-menu.js"),
 	undo = require("$:/plugins/rimir/outline/outline-undo.js"),
 	clipboard = require("$:/plugins/rimir/outline/outline-clipboard.js"),
+	overlay = require("$:/plugins/rimir/outline/outline-overlay.js"),
 	dom = require("$:/plugins/rimir/outline/dom-utils.js"),
 	blockTypes = require("$:/plugins/rimir/outline/block-types.js");
 
@@ -59,6 +60,7 @@ menu.install(OutlineWidget.prototype);
 undo.install(OutlineWidget.prototype);
 // System clipboard (copy, cut, paste events): handleCopy, handleCut, handlePaste
 clipboard.install(OutlineWidget.prototype);
+overlay.install(OutlineWidget.prototype);
 
 OutlineWidget.prototype.render = function(parent, nextSibling) {
 	this.parentDomNode = parent;
@@ -134,6 +136,16 @@ OutlineWidget.prototype.sleep = function() {
 	if(!this.awake || this.editor) {
 		return false;
 	}
+	// The outline inside an overlay does not sleep on its own: its overlay closes (outline-overlay.js)
+	var host = this.overlayHost();
+	if(host) {
+		return host.closeOverlay();
+	}
+	// Not while an editor is open in this outline's overlay either
+	if(this.overlayBusy()) {
+		return false;
+	}
+	this.closeOverlay();
 	this.closeMenu();
 	this.stopWatching();
 	this.clearStamps();
@@ -153,7 +165,12 @@ True when `node` is in a view of this outline's tiddler: in an outline of the sa
 of it, which shares the selection) or in the frame around one (its ? button and key overview).
 */
 OutlineWidget.prototype.ownsTarget = function(node) {
-	var title = this.tiddlerTitle;
+	var title = this.tiddlerTitle,
+		host = this.overlayHost();
+	// This outline's overlay is its own; the outline inside an overlay owns its whole overlay (title bar too)
+	if(this.inOverlay(node) || (host && host.inOverlay(node))) {
+		return true;
+	}
 	for(var n = node; n && n.getAttribute; n = n.parentNode) {
 		var classes = " " + (n.getAttribute("class") || "") + " ";
 		if(classes.indexOf(" rr-ol ") !== -1) {
@@ -238,6 +255,10 @@ OutlineWidget.prototype.refresh = function(changedTiddlers) {
 	if(this.editor && this.editor.widget) {
 		this.editor.widget.refresh(changedTiddlers);
 	}
+	// The overlay is outside the children too (outline-overlay.js)
+	if(this.overlay) {
+		this.overlay.widget.refresh(changedTiddlers);
+	}
 	if(refreshed || changedTiddlers[this.tiddlerTitle]) {
 		this.mapUnits();
 	} else if(changedTiddlers[this.selectionTitle()]) {
@@ -251,9 +272,17 @@ Remove the editor (it is not part of the children). A changed buffer is kept and
 this tiddler (an ancestor re-render destroys this widget); an unchanged one is discarded (releaseEditor).
 */
 OutlineWidget.prototype.destroy = function(options) {
-	var leaving = this.leftStory();
+	// The outline of a closing overlay leaves like a closed tiddler, unless its tiddler is open in the story too
+	var leaving = this.closingOverlay ? this.wiki.getTiddlerList(this.getVariable("tv-story-list") || "$:/StoryList")
+			.indexOf(this.tiddlerTitle) === -1 : this.leftStory();
+	this.closeOverlay(true);
 	this.stopWatching();
 	this.closeMenu();
+	// A forced close of an overlay with an open editor keeps that edit (like an edit over a re-render)
+	var keepEdit = this.closingOverlay && !!this.editor;
+	if(keepEdit) {
+		this.releaseEditor();
+	}
 	if(leaving) {
 		// Closed (any way: close, close all, close others, a changed story list): forget its outline state, also a
 		// changed edit; a reopened tiddler starts idle
@@ -261,12 +290,12 @@ OutlineWidget.prototype.destroy = function(options) {
 			this.closeEditor(true);
 		}
 		var wiki = this.wiki;
-		$tw.utils.each([this.selectionTitle(), this.bufferTitle(), this.helpTitle()], function(title) {
-			if(wiki.tiddlerExists(title)) {
+		$tw.utils.each([this.selectionTitle(), keepEdit ? null : this.bufferTitle(), this.helpTitle()], function(title) {
+			if(title && wiki.tiddlerExists(title)) {
 				wiki.deleteTiddler(title);
 			}
 		});
-	} else {
+	} else if(!keepEdit) {
 		this.releaseEditor();
 	}
 	Widget.prototype.destroy.call(this, options);
@@ -316,6 +345,7 @@ OutlineWidget.prototype.mapUnits = function() {
 	});
 	this.mapDiagrams();
 	this.restoreSelection();
+	this.placeOverlay();
 	this.showEmptyHint();
 	this.reattachEditor();
 };

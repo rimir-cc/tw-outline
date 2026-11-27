@@ -1,0 +1,5 @@
+title: $:/plugins/rimir/outline/ui/overlay
+
+\whitespace trim
+<$transclude $tiddler="$:/plugins/rimir/outline/ui/overlay-bar"/>
+<$outline tiddler=<<rr-ol-overlay-target>>><$transclude $tiddler=<<rr-ol-overlay-target>> $mode="block"/></$outline>

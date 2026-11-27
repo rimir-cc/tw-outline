@@ -21,6 +21,25 @@ exports.setClass = function(node, cls, on) {
 	}
 };
 
+/*
+Put the page's caret (a collapsed selection) at the start of `node`. Browsers send copy / cut / paste to where the
+caret is (Firefox only fires them when there is one), not to the focused element: an outline that gets the keyboard
+focus without a click (the overlay) needs the caret too.
+*/
+exports.caretInto = function(node) {
+	var doc = node && node.ownerDocument,
+		view = doc && doc.defaultView,
+		selection = view && view.getSelection ? view.getSelection() : null;
+	if(!selection || !doc.createRange) {
+		return;
+	}
+	var range = doc.createRange();
+	range.setStart(node, 0);
+	range.collapse(true);
+	selection.removeAllRanges();
+	selection.addRange(range);
+};
+
 exports.focus = function(node) {
 	if(node && node.focus) {
 		node.focus({preventScroll: true});

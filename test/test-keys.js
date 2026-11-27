@@ -429,7 +429,7 @@ describe("outline selection and keys", function() {
 		var opened = [];
 		r.widget.openTarget = function(t) { opened.push(t); return true; };
 		r.widget.select(idOf(r, "{{X}}"));
-		key(r, KEYS.enter, {shift: true});
+		key(r, KEYS.enter, {shift: true, ctrl: true});
 		expect(opened).toEqual(["X"]);
 		expect(r.widget.editor).toBe(null);
 		key(r, KEYS.enter);
@@ -629,7 +629,7 @@ describe("outline selection and keys", function() {
 		expect(selectedSource(r)).toBe("* x");
 	});
 
-	it("shift-enter opens the transcluded tiddler of a transclusion line or of a bullet with a transclusion", function() {
+	it("ctrl-shift-enter opens the transcluded tiddler of a transclusion line or of a bullet with a transclusion in the story", function() {
 		var r = renderOutline(makeWiki([{title: "T", text: "* a\n* b {{Y}}\n* <$transclude $tiddler=\"Z\"/>\n\n{{X}}"},
 				{title: "X", text: "! x"}, {title: "Y", text: "y"}, {title: "Z", text: "z"}]), "T"),
 			opened = [];
@@ -638,7 +638,7 @@ describe("outline selection and keys", function() {
 		expect(r.widget.openTransclusion()).toBe(false);
 		["{{X}}", "* b {{Y}}", "* <$transclude $tiddler=\"Z\"/>"].forEach(function(src) {
 			r.widget.select(idOf(r, src));
-			expect(key(r, KEYS.enter, {shift: true}).prevented).toBe(true);
+			expect(key(r, KEYS.enter, {shift: true, ctrl: true}).prevented).toBe(true);
 		});
 		expect(opened).toEqual(["X", "Y", "Z"]);
 		// Plain Enter does not open it

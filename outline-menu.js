@@ -278,7 +278,7 @@ methods.runMenuEntry = function(index) {
 	} else if(entry.action === "add") {
 		this.startTargetEdit(id, {isNew: true, typeName: entry.type});
 	} else if(entry.action === "edit-target") {
-		this.startTargetEdit(id, {title: entry.title});
+		this.openOverlay(id, entry.title);
 	} else if(menu.retype) {
 		this.startEdit(menu.retype.id, {isNew: true, blockType: entry.type, where: menu.retype.where});
 	} else if(reedit) {

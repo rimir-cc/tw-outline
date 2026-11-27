@@ -100,9 +100,25 @@ methods.writeClip = function(event) {
 	return true;
 };
 
+/*
+The outline a clipboard event is for: this one when it owns it, else the outline of its overlay (or one inside that)
+when that one has the focus. The browser sends copy/cut/paste to where the page's caret is, which can still be in
+this outline's text while its overlay has the keyboard focus. Null when none (or the event was handled already).
+*/
+methods.clipboardOutline = function(event, paste) {
+	if(event.defaultPrevented) {
+		return null;
+	}
+	if(this.ownsClipboardEvent(event, paste)) {
+		return this;
+	}
+	return this.overlay && this.overlay.outline ? this.overlay.outline.clipboardOutline(event, paste) : null;
+};
+
 methods.handleCopy = function(event) {
-	if(this.ownsClipboardEvent(event)) {
-		this.writeClip(event);
+	var w = this.clipboardOutline(event);
+	if(w) {
+		w.writeClip(event);
 		event.preventDefault();
 	}
 };
@@ -133,12 +149,13 @@ methods.flashUnit = function(id) {
 
 // Copy, then delete like Delete's first entry, without asking; one write (one undo step)
 methods.handleCut = function(event) {
-	if(!this.ownsClipboardEvent(event)) {
+	var w = this.clipboardOutline(event);
+	if(!w) {
 		return;
 	}
 	event.preventDefault();
-	if(!this.isReadOnly() && !this.editor && this.writeClip(event)) {
-		this.operate("deleteUnit");
+	if(!w.isReadOnly() && !w.editor && w.writeClip(event)) {
+		w.operate("deleteUnit");
 	}
 };
 
@@ -164,8 +181,13 @@ methods.readClip = function(event, adapter) {
 
 // Paste after the selected unit, or at the end of a tiddler without units
 methods.handlePaste = function(event) {
+	var w = this.clipboardOutline(event, true);
+	if(w && w !== this) {
+		w.handlePaste(event);
+		return;
+	}
 	var adapter = this.getAdapter();
-	if(!this.ownsClipboardEvent(event, true) || !adapter || !adapter.paste) {
+	if(!w || !adapter || !adapter.paste) {
 		return;
 	}
 	// Not also imported as tiddlers by a dropzone around the outline (it does not check defaultPrevented)

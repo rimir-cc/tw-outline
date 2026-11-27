@@ -15,6 +15,7 @@ outline-promote: shift-Tab
 outline-edit: Enter
 outline-menu: alt-Enter
 outline-open: shift-Enter
+outline-open-story: ctrl-shift-Enter
 outline-add: ctrl-Enter
 outline-clear: Escape
 outline-save: ctrl-Enter

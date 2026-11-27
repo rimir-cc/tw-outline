@@ -27,7 +27,8 @@ type: text/vnd.tiddlywiki
 |`outline-delete` |Delete |Delete the unit with its subtree, after a confirmation menu (see Delete) |
 |`outline-undo` / `outline-redo` |ctrl-Z / ctrl-Y, ctrl-shift-Z |Undo / redo the last change made in the outline (see Undo) |
 |`outline-menu` |alt-Enter |Block menu: insert a new block after or before the unit, or turn it into another type; Up/Down, Enter runs, Escape closes. In the editor: save, then only //Turn into//; the editor opens again on the unit, also after Escape |
-|`outline-open` |Shift-Enter |Open the tiddler a transclusion line or bullet transcludes (the first one) in outline mode; a diagram: its source in place |
+|`outline-open` |Shift-Enter |Open the tiddler a transclusion line or bullet transcludes (the first one) in an overlay over it; a diagram: its source with a live preview, Ctrl-Enter saves |
+|`outline-open-story` |Ctrl-Shift-Enter |Open that tiddler in the story, in outline mode |
 |`outline-clear` |Escape |Clear selection; with nothing selected: put the outline to sleep |
 |`outline-save` |ctrl-Enter |Save the edit |
 |`outline-continue` |Enter |Save and open a new unit (single-line units). In the middle of a list item's text: split it (see Split); at the start of a filled list item or paragraph: a new empty one above (see New unit) |
@@ -176,6 +177,10 @@ The block menu's last entry (under //More//) for a unit or a range (not for tran
 |Blocks, headings (with their sections), a whole list, top-level items |the text as it was |a `{{title}}` line set apart by blank lines (top-level items in the middle of a list: the list renders as separate lists around it) |
 |Sub-items starting at their parent's first sub-item |the items moved to level 1 (`** a1` → `* a1`), with their sub-items |`<$transclude $tiddler="title" $mode="block"/>` at the end of the parent's line: a nested list before the parent's other sub-items |
 |Sub-items in the middle, transclusion lines |– (not offered) | |
+
+!! Transclusion overlay
+
+Shift-Enter on a `{{X}}` line or a bullet with a transclusion of a wikitext tiddler opens X's own outline in `.rr-ol-overlay` over the unit: full width of the outline, from the unit's top, as high as its content (menus inside are never cut off), with a title bar (X's title, //open// = in the story, × = close). X's last selection or its first unit is selected and has the keyboard focus; keys, editor, block menu, undo, ranges, clipboard and Externalize act on X, the host shows the changes underneath. It closes with Escape when nothing is selected in it, a click outside it, ×, or when its unit is gone (not while an editor is open in it; when the unit is gone that edit is kept like one over a re-render); field, index and template transclusions (`{{X!!f}}`, `{{X##i}}`, `{{X||T}}`) open in the story instead; the host's selection is the unit again. A transclusion inside opens a further overlay on top. A diagram opens in the same overlay with its source in a code field (buffer `$:/temp/rimir/outline/diagram/<note>`) and a live preview below; Ctrl-Enter saves into the diagram tiddler, Escape closes without writing, a click outside closes it only when nothing was changed. //Add to this item// for a new diagram keeps the code field below the bullet (the tiddler does not exist before its first save). Closing forgets X's selection (unless X is open in the story too).
 
 !! Names of new tiddlers
 

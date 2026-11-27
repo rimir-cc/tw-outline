@@ -106,7 +106,11 @@ A heading and a list item are one source line. Several lines would have to be sq
 
 !! How do I add Graphviz or Mermaid diagrams?
 
-Install rimir/graphviz or rimir/mermaid. Each registers a block type: //Insert after → Graphviz graph// writes a `$$$text/vnd.graphviz` block, and on a bullet //Add to this item → Graphviz graph// creates a graph tiddler and transcludes it in the item. A double-click on the graph edits its source in place.
+Install rimir/graphviz or rimir/mermaid. Each registers a block type: //Insert after → Graphviz graph// writes a `$$$text/vnd.graphviz` block, and on a bullet //Add to this item → Graphviz graph// creates a graph tiddler and transcludes it in the item. A double-click on the graph (or Shift-Enter on its line) opens its source with a live preview in an overlay; Ctrl-Enter saves.
+
+!! Can I edit a transcluded tiddler where it is shown?
+
+Select its line (or the bullet) and press Shift-Enter: it opens in an overlay right there, with its own outline. Escape (twice: first the selection) closes it. Ctrl-Shift-Enter opens it in the story instead.
 
 !! How do I move several blocks at once?
 

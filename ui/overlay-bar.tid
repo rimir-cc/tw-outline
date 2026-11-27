@@ -1,0 +1,4 @@
+title: $:/plugins/rimir/outline/ui/overlay-bar
+
+\whitespace trim
+<div class="rr-ol-overlay-bar"><span class="rr-ol-overlay-title"><$text text=<<rr-ol-overlay-target>>/></span><$list filter="[<rr-ol-overlay-buffer>!is[blank]]" variable="_"><span class="rr-ol-overlay-hint">Ctrl-Enter saves, Escape discards</span></$list><button class="tc-btn-invisible rr-ol-overlay-button" data-ol-overlay-action="story" title="Open in the story (Ctrl-Shift-Enter)">open</button><button class="tc-btn-invisible rr-ol-overlay-button" data-ol-overlay-action="close" title="Close (Escape)">×</button></div>

@@ -14,7 +14,8 @@ outline-indent: Outline: indent the selected unit and its subtree by one level
 outline-promote: Outline: promote the selected unit and its subtree by one level
 outline-edit: Outline: edit the selected unit in place
 outline-menu: Outline: block menu - insert a new block after or before the selected unit, or turn it into another type (in the editor: turn the edited unit into another type)
-outline-open: Outline: open the tiddler the selected unit transcludes (a {{...}} line, or a bullet with one) in outline mode; a diagram: its source in place
+outline-open: Outline: open the tiddler the selected unit transcludes (a {{...}} line, or a bullet with one) in an overlay over it; a diagram: its source in place
+outline-open-story: Outline: open the tiddler the selected unit transcludes in the story, in outline mode
 outline-add: Outline: edit a new empty unit below the selected one (a list item: an item on its level; anything else: a paragraph)
 outline-clear: Outline: clear the selection; with nothing selected, put the outline to sleep
 outline-save: Outline editor: save the edit

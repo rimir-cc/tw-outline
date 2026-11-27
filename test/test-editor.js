@@ -19,7 +19,7 @@ describe("outline editor", function() {
 
 	// Shortcut config and the editor template (shadows of the plugin) copied into each test wiki
 	function pluginTiddlers() {
-		return $tw.wiki.filterTiddlers("[all[shadows+tiddlers]prefix[$:/config/shortcuts/outline-]] [[" + EDITOR + "]] " +
+		return $tw.wiki.filterTiddlers("[all[shadows+tiddlers]prefix[$:/config/shortcuts/outline-]] [[" + EDITOR + "]] [[$:/plugins/rimir/outline/ui/overlay]] [[$:/plugins/rimir/outline/ui/overlay-diagram]] [[$:/plugins/rimir/outline/ui/overlay-bar]] " +
 			"[all[shadows+tiddlers]tag[$:/tags/rimir/outline/BlockType]prefix[$:/plugins/rimir/outline/]] [[$:/tags/rimir/outline/BlockType]]").map(function(title) {
 			return $tw.wiki.getTiddler(title).fields;
 		});
@@ -688,20 +688,22 @@ describe("outline editor", function() {
 				expect(i).not.toBe(-1);
 				r.widget.setMenuActive(i);
 				press(r, 13);
-				expect(r.widget.editor.target.title).toBe("G");
-				expect(r.wiki.getTiddlerText(BUF + "T")).toBe("g");
-				r.type("h");
-				r.widget.saveEdit();
+				// The diagram overlay (outline-overlay.js) with its source
+				var DBUF = "$:/temp/rimir/outline/diagram/T";
+				expect(r.widget.overlay.title).toBe("G");
+				expect(r.wiki.getTiddlerText(DBUF)).toBe("g");
+				r.wiki.addTiddler(new $tw.Tiddler(r.wiki.getTiddler(DBUF), {text: "h"}));
+				r.widget.saveOverlay();
 				expect(r.wiki.getTiddlerText("G")).toBe("h");
 				expect(r.wiki.getTiddlerText("T")).toBe("* a {{G}}\n* b");
 				r.refresh();
-				r.widget.startTargetEdit(r.idOf("* a {{G}}"), {title: "G"});
-				r.type("zzz");
-				r.widget.cancelEdit();
+				r.widget.openOverlay(r.idOf("* a {{G}}"), "G");
+				r.wiki.addTiddler(new $tw.Tiddler(r.wiki.getTiddler(DBUF), {text: "zzz"}));
+				r.widget.closeOverlay(true);
 				expect(r.wiki.getTiddlerText("G")).toBe("h");
 			});
 
-			it("enter edits a transclusion line, also a block-level {{...}}; shift-enter on a diagram edits its source", function() {
+			it("enter edits a transclusion line, also a block-level {{...}}; shift-enter on a diagram opens its overlay", function() {
 				var r = render("para\n\n{{W}}\n\n{{G}}", [TYPE, {title: "W", text: "w"}, {title: "G", type: "text/plain", text: "g"}]);
 				r.widget.select(r.idOf("{{W}}"));
 				press(r, 13);
@@ -710,23 +712,23 @@ describe("outline editor", function() {
 				r.widget.cancelEdit();
 				r.widget.select(r.idOf("{{G}}"));
 				press(r, 13, {shift: true});
-				expect(r.widget.editor.target.title).toBe("G");
-				r.widget.cancelEdit();
+				expect(r.widget.overlay && r.widget.overlay.diagram && r.widget.overlay.title).toBe("G");
+				r.widget.closeOverlay(true);
 				// No "Edit this line" entry any more
 				press(r, 13, {alt: true});
 				expect(r.widget.menu.entries.some(function(e) { return e.action === "edit"; })).toBe(false);
 			});
 
-			it("double-click on a diagram in an item opens its editor; Enter on a block-level diagram too", function() {
+			it("double-click on a diagram in an item opens its overlay; shift-enter on a block-level diagram too", function() {
 				var r = render("* a {{G}}\n* b\n\n{{G}}\n\n{{W}}", [TYPE, {title: "G", type: "text/plain", text: "g"}, {title: "W", text: "w"}]);
 				var node = r.widget.diagramTargets(r.idOf("* a {{G}}"))[0].node;
 				r.widget.handleDblClick({target: node, preventDefault: function() {}});
-				expect(r.widget.editor.target.title).toBe("G");
-				r.widget.cancelEdit();
+				expect(r.widget.overlay && r.widget.overlay.title).toBe("G");
+				r.widget.closeOverlay(true);
 				r.widget.select(r.idOf("{{G}}"));
 				press(r, 13, {shift: true});
-				expect(r.widget.editor && r.widget.editor.target && r.widget.editor.target.title).toBe("G");
-				r.widget.cancelEdit();
+				expect(r.widget.overlay && r.widget.overlay.title).toBe("G");
+				r.widget.closeOverlay(true);
 			});
 
 			it("a click on a diagram in an item selects the item, it does not open the diagram tiddler", function() {
@@ -1061,7 +1063,7 @@ describe("outline editor", function() {
 		var events = [];
 		spyOn(r.widget, "dispatchEvent").and.callFake(function(ev) { events.push(ev); });
 		r.widget.select(r.idOf("{{X}}"));
-		var ev = {keyCode: 13, shiftKey: true, altKey: false, ctrlKey: false, metaKey: false,
+		var ev = {keyCode: 13, shiftKey: true, altKey: false, ctrlKey: true, metaKey: false,
 			target: r.widget.domNode, defaultPrevented: false, prevented: false,
 			preventDefault: function() { this.prevented = true; }, stopPropagation: function() {}};
 		r.widget.handleKeydown(ev);

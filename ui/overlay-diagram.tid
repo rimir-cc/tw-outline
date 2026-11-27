@@ -1,0 +1,6 @@
+title: $:/plugins/rimir/outline/ui/overlay-diagram
+
+\whitespace trim
+<$transclude $tiddler="$:/plugins/rimir/outline/ui/overlay-bar"/>
+<$edit-text tiddler=<<rr-ol-overlay-buffer>> tag="textarea" class="rr-ol-overlay-code" focus="yes" autoHeight="yes" minHeight="4em"/>
+<div class="rr-ol-overlay-preview"><$transclude $tiddler=<<rr-ol-overlay-buffer>> $mode="block"/></div>
