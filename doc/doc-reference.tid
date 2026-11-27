@@ -22,12 +22,12 @@ type: text/vnd.tiddlywiki
 |`outline-parent` / `outline-child` |Left / Right |Select the parent unit (item of a sub-item, whole list of a top-level item, heading of a section) / the first child |
 |`outline-move-up` / `outline-move-down` |alt-Up / alt-Down |Swap with previous / next sibling |
 |`outline-indent` / `outline-promote` |Tab / shift-Tab |Demote / promote by one level |
-|`outline-edit` |Enter |Edit in place (on a transclusion Enter opens the target) |
+|`outline-edit` |Enter |Edit in place (a transclusion line too) |
 |`outline-add` |ctrl-Enter |Edit a new empty unit below the selected one (see New unit) |
 |`outline-delete` |Delete |Delete the unit with its subtree, after a confirmation menu (see Delete) |
 |`outline-undo` / `outline-redo` |ctrl-Z / ctrl-Y, ctrl-shift-Z |Undo / redo the last change made in the outline (see Undo) |
 |`outline-menu` |alt-Enter |Block menu: insert a new block after or before the unit, or turn it into another type; Up/Down, Enter runs, Escape closes. In the editor: save, then only //Turn into//; the editor opens again on the unit, also after Escape |
-|`outline-open` |Enter |Open the transclusion target in outline mode |
+|`outline-open` |Shift-Enter |Open the tiddler a transclusion line or bullet transcludes (the first one) in outline mode; a diagram: its source in place |
 |`outline-clear` |Escape |Clear selection; with nothing selected: put the outline to sleep |
 |`outline-save` |ctrl-Enter |Save the edit |
 |`outline-continue` |Enter |Save and open a new unit (single-line units). In the middle of a list item's text: split it (see Split); at the start of a filled list item or paragraph: a new empty one above (see New unit) |
@@ -162,7 +162,28 @@ Turn into: everything turns into everything, with one rule: a multi-line unit (p
 |Top-level list item |item types: a sibling with the item's marker (Insert before on the first item: a new first bullet); other types: before / after the whole list. Plus //Add to this item// |every other type: as a block it leaves its list (the list splits, its sub-items stay a list below it, one level up) |
 |Sub-item |the same |the other item types (with all its siblings of that level) |
 |Whole list |the same |the other item types (all levels) |
-|Transclusion |the same, plus //Edit this line// first (a diagram: //Edit <title>//) |– |
+|Transclusion |the same (a diagram: plus //Edit <title>//) |– |
+
+!! Ranges
+
+Shift-Up / Shift-Down extend the selection to the previous / next sibling (the selectable units under the same parent: items of one level under the same parent item or list, blocks and headings of one section); at the first / last sibling they stay. Shift-Click selects the range from the anchor to a clicked sibling (a non-sibling: just that unit). Escape, a plain click and Up/Down go back to one unit. Each unit of a range is framed and takes its subtree along. Alt-Up/Down, Tab/Shift-Tab run the single-unit operation for each unit, all or nothing, as one undo step; Delete asks once; Ctrl-C/X take the whole span as one clip. Turn into, Enter, Insert, Add to this item and the block menu act on the selected unit (the range's moving end). A move or indent that would change the order of the range's units (a heading taking the block above it into its section) is refused. The selection tiddler keeps the range's other end in `anchor-start` / `anchor-kind`.
+
+!! Externalize
+
+The block menu's last entry (under //More//) for a unit or a range (not for transclusion lines): the text moves into a new wikitext tiddler, a reference takes its place, the reference is selected; undo restores the text, the new tiddler stays.
+
+|!Selected |!New tiddler |!In its place |
+|Blocks, headings (with their sections), a whole list, top-level items |the text as it was |a `{{title}}` line set apart by blank lines (top-level items in the middle of a list: the list renders as separate lists around it) |
+|Sub-items starting at their parent's first sub-item |the items moved to level 1 (`** a1` → `* a1`), with their sub-items |`<$transclude $tiddler="title" $mode="block"/>` at the end of the parent's line: a nested list before the parent's other sub-items |
+|Sub-items in the middle, transclusion lines |– (not offered) | |
+
+!! Names of new tiddlers
+
+|!Config |!Default |!Made by |
+|`$:/config/rimir/outline/name/externalize` |`$host$/parts/part` |Externalize |
+|`$:/config/rimir/outline/name/diagram` |`$host$/graphs/$type$` |Add to this item (diagrams) |
+
+`$host$` is the tiddler's title, `$type$` the block type's name; the first free number from 1 is appended (`My note/parts/part1`). A title with `{`, `}`, `|`, `!!` or `##` is referenced with `<$transclude $tiddler=…/>` instead of `{{…}}`.
 
 !! Block types
 
@@ -182,7 +203,7 @@ Overriding a built-in type's `badge` changes only its new-block editor field; un
 
 !! Add to this item and diagram editing
 
-On a list item, //Add to this item// lists the types with the `item` context. A `transclude` type opens a code field below the item with the type's starter text; nothing is written until Ctrl-Enter, which creates the tiddler `<item text> (<badge>)` (plain text, at most about 40 characters; the host title for an item without text; made unique) of the type's content type and appends `{{title}}` to the item's line (Ctrl-Z removes the reference, the tiddler stays). A template type appends the filled template. Escape writes nothing. A transcluded diagram (inline in a unit, or a block-level transclusion line) opens the same field on its tiddler's text: double-click, Enter on the line, or //Edit <title>// in the block menu; Ctrl-Enter saves into that tiddler, Escape discards. The field has the orange frame of another tiddler's content; only Ctrl-Enter and Escape are outline keys in it.
+On a list item, //Add to this item// lists the types with the `item` context. A `transclude` type opens a code field below the item with the type's starter text; nothing is written until Ctrl-Enter, which creates the tiddler named by `$:/config/rimir/outline/name/diagram` (default `<note>/graphs/<type><n>`) of the type's content type and appends `{{title}}` to the item's line (Ctrl-Z removes the reference, the tiddler stays). A template type appends the filled template. Escape writes nothing. A transcluded diagram (inline in a unit, or a block-level transclusion line) opens the same field on its tiddler's text: double-click on it, Shift-Enter on its unit, or //Edit <title>// in the block menu; Ctrl-Enter saves into that tiddler, Escape discards. The field has the orange frame of another tiddler's content; only Ctrl-Enter and Escape are outline keys in it.
 
 !! State and config
 

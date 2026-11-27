@@ -20,7 +20,8 @@ tags: $:/tags/Stylesheet
 	--rr-ol-other-tiddler: #e8800c;
 }
 
-.rr-ol-selected[data-ol-kind="transclusion"] {
+.rr-ol-selected[data-ol-kind="transclusion"],
+.rr-ol-selected[data-ol-only-transclusion] {
 	outline-color: var(--rr-ol-other-tiddler);
 }
 

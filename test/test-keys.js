@@ -15,7 +15,8 @@ describe("outline selection and keys", function() {
 
 	// Shortcut config (shadows of the plugin) copied into each test wiki
 	function shortcutTiddlers() {
-		return $tw.wiki.filterTiddlers("[all[shadows+tiddlers]prefix[$:/config/shortcuts/outline-]]").map(function(title) {
+		return $tw.wiki.filterTiddlers("[all[shadows+tiddlers]prefix[$:/config/shortcuts/outline-]] " +
+			"[all[shadows+tiddlers]tag[$:/tags/rimir/outline/BlockType]prefix[$:/plugins/rimir/outline/]] [[$:/tags/rimir/outline/BlockType]]").map(function(title) {
 			return $tw.wiki.getTiddler(title).fields;
 		});
 	}
@@ -106,7 +107,7 @@ describe("outline selection and keys", function() {
 				"outline-up": "Up", "outline-down": "Down", "outline-move-up": "alt-Up", "outline-move-down": "alt-Down",
 				"outline-indent": "Tab", "outline-promote": "shift-Tab", "outline-edit": "Enter", "outline-menu": "alt-Enter", "outline-add": "ctrl-Enter",
 				"outline-parent": "Left", "outline-child": "Right", "outline-up-deep": "ctrl-Up", "outline-down-deep": "ctrl-Down", "outline-edit-up": "ctrl-Up", "outline-edit-down": "ctrl-Down",
-				"outline-open": "Enter", "outline-clear": "Escape", "outline-save": "ctrl-Enter",
+				"outline-open": "shift-Enter", "outline-clear": "Escape", "outline-save": "ctrl-Enter",
 				"outline-continue": "Enter", "outline-newline": "shift-Enter", "outline-cancel": "Escape",
 				"outline-help": "shift-slash", "outline-delete": "Delete", "outline-merge": "Backspace", "outline-merge-next": "Delete",
 				"outline-undo": "ctrl-Z", "outline-redo": "ctrl-Y ctrl-shift-Z"
@@ -418,7 +419,7 @@ describe("outline selection and keys", function() {
 		expect(key(r, KEYS.right).prevented).toBe(false);
 	});
 
-	it("enter edits the selected unit; on a transclusion it opens the target", function() {
+	it("enter edits the selected unit, also a transclusion line; shift-enter opens the target", function() {
 		var r = renderOutline(makeWiki([{title: "T", text: "* a\n\n{{X}}"}, {title: "X", text: "x"}]), "T");
 		r.widget.select(idOf(r, "* a"));
 		expect(key(r, KEYS.enter).prevented).toBe(true);
@@ -428,16 +429,13 @@ describe("outline selection and keys", function() {
 		var opened = [];
 		r.widget.openTarget = function(t) { opened.push(t); return true; };
 		r.widget.select(idOf(r, "{{X}}"));
-		key(r, KEYS.enter);
+		key(r, KEYS.enter, {shift: true});
 		expect(opened).toEqual(["X"]);
 		expect(r.widget.editor).toBe(null);
-		// Alt-Enter: the block menu; its first entry edits the line
-		key(r, KEYS.enter, {alt: true});
-		expect(r.widget.menu).not.toBe(null);
-		expect(r.widget.menu.entries[0].action).toBe("edit");
 		key(r, KEYS.enter);
-		expect(r.widget.menu).toBe(null);
+		expect(opened).toEqual(["X"]);
 		expect(r.widget.editor).not.toBe(null);
+		expect(r.widget.editor.id).toBe(idOf(r, "{{X}}"));
 	});
 
 	it("escape clears, events already handled are ignored", function() {
@@ -631,12 +629,22 @@ describe("outline selection and keys", function() {
 		expect(selectedSource(r)).toBe("* x");
 	});
 
-	it("outline-open acts only on a transclusion unit", function() {
-		var r = renderOutline(makeWiki([{title: "T", text: "* a\n\n{{X}}"}, {title: "X", text: "! x"}]), "T");
+	it("shift-enter opens the transcluded tiddler of a transclusion line or of a bullet with a transclusion", function() {
+		var r = renderOutline(makeWiki([{title: "T", text: "* a\n* b {{Y}}\n* <$transclude $tiddler=\"Z\"/>\n\n{{X}}"},
+				{title: "X", text: "! x"}, {title: "Y", text: "y"}, {title: "Z", text: "z"}]), "T"),
+			opened = [];
+		r.widget.openTarget = function(title) { opened.push(title); };
 		r.widget.select(idOf(r, "* a"));
 		expect(r.widget.openTransclusion()).toBe(false);
+		["{{X}}", "* b {{Y}}", "* <$transclude $tiddler=\"Z\"/>"].forEach(function(src) {
+			r.widget.select(idOf(r, src));
+			expect(key(r, KEYS.enter, {shift: true}).prevented).toBe(true);
+		});
+		expect(opened).toEqual(["X", "Y", "Z"]);
+		// Plain Enter does not open it
 		r.widget.select(idOf(r, "{{X}}"));
-		expect(key(r, KEYS.enter).prevented).toBe(true);
+		key(r, KEYS.enter);
+		expect(opened).toEqual(["X", "Y", "Z"]);
 	});
 
 	it("ignores keys from elements inside the container", function() {
@@ -645,5 +653,172 @@ describe("outline selection and keys", function() {
 		var input = $tw.fakeDocument.createElement("input");
 		expect(key(r, KEYS.down, {target: input}).prevented).toBe(false);
 		expect(r.widget.selectedId).toBe(1);
+	});
+
+	describe("range", function() {
+		function sources(r) {
+			var m = r.widget.model;
+			return r.widget.rangeIds().map(function(id) { return m.text.substring(m.units[id].start, m.units[id].end); });
+		}
+		function framed(r) {
+			return r.widget.units.filter(function(e) {
+				return e.domNodes.length && hasClass(e.domNodes[0], "rr-ol-selected");
+			}).length;
+		}
+
+		it("shift-down/up extend the selection over siblings and stop at the last one", function() {
+			var r = renderOutline(makeWiki([{title: "T", text: "a\n\nb\n\nc"}]), "T");
+			r.widget.select(idOf(r, "a"));
+			expect(key(r, KEYS.down, {shift: true}).prevented).toBe(true);
+			key(r, KEYS.down, {shift: true});
+			expect(sources(r)).toEqual(["a", "b", "c"]);
+			expect(framed(r)).toBe(3);
+			key(r, KEYS.down, {shift: true});
+			expect(sources(r)).toEqual(["a", "b", "c"]);
+			key(r, KEYS.up, {shift: true});
+			expect(sources(r)).toEqual(["a", "b"]);
+			expect(selectedSource(r)).toBe("b");
+		});
+
+		it("on items it goes to the next sibling item, past sub-items", function() {
+			var r = renderOutline(makeWiki([{title: "T", text: "* a\n** a1\n* b"}]), "T");
+			r.widget.select(idOf(r, "* a"));
+			key(r, KEYS.down, {shift: true});
+			expect(sources(r)).toEqual(["* a", "* b"]);
+		});
+
+		it("stops at the end of a section", function() {
+			var r = renderOutline(makeWiki([{title: "T", text: "! H\n\nx\n\ny\n\n! I\n\nz"}]), "T");
+			r.widget.select(idOf(r, "x"));
+			key(r, KEYS.down, {shift: true});
+			key(r, KEYS.down, {shift: true});
+			expect(sources(r)).toEqual(["x", "y"]);
+		});
+
+		it("shift-click selects the range to a sibling; a non-sibling is selected alone", function() {
+			var r = renderOutline(makeWiki([{title: "T", text: "* a\n** a1\n* b\n* c"}]), "T"),
+				click = function(id, shift) {
+					r.widget.handleClick({target: r.widget.units[id].domNodes[0], shiftKey: !!shift, ctrlKey: false, metaKey: false,
+						preventDefault: function() {}, stopPropagation: function() {}});
+				};
+			r.widget.select(idOf(r, "* a"));
+			click(idOf(r, "* c"), true);
+			expect(sources(r)).toEqual(["* a", "* b", "* c"]);
+			click(idOf(r, "** a1"), true);
+			expect(sources(r)).toEqual(["** a1"]);
+		});
+
+		it("escape and up/down collapse the range", function() {
+			var r = renderOutline(makeWiki([{title: "T", text: "a\n\nb\n\nc"}]), "T");
+			r.widget.select(idOf(r, "a"));
+			key(r, KEYS.down, {shift: true});
+			key(r, KEYS.escape);
+			expect(sources(r)).toEqual(["b"]);
+			expect(framed(r)).toBe(1);
+			r.widget.select(idOf(r, "a"));
+			key(r, KEYS.down, {shift: true});
+			key(r, KEYS.down);
+			expect(sources(r)).toEqual(["c"]);
+		});
+
+		function rangeOf(r, from, to) {
+			r.widget.select(idOf(r, from));
+			r.widget.selectRange(idOf(r, from), idOf(r, to));
+		}
+
+		it("alt-up/down move the whole range, one undo step", function() {
+			var wiki = makeWiki([{title: "T", text: "a\n\nb\n\nc\n\nd"}]),
+				r = renderOutline(wiki, "T");
+			rangeOf(r, "b", "c");
+			key(r, KEYS.up, {alt: true});
+			expect(wiki.getTiddlerText("T")).toBe("b\n\nc\n\na\n\nd");
+			r.refresh();
+			expect(sources(r)).toEqual(["b", "c"]);
+			key(r, KEYS.down, {alt: true});
+			key(r, KEYS.down, {alt: true});
+			expect(wiki.getTiddlerText("T")).toBe("a\n\nd\n\nb\n\nc");
+			r.refresh();
+			r.widget.undoStep(true);
+			expect(wiki.getTiddlerText("T")).toBe("a\n\nb\n\nc\n\nd");
+		});
+
+		it("tab/shift-tab indent the whole range; refused as a whole when one unit cannot", function() {
+			var wiki = makeWiki([{title: "T", text: "* a\n* b\n* c"}]),
+				r = renderOutline(wiki, "T");
+			rangeOf(r, "* b", "* c");
+			key(r, KEYS.tab);
+			expect(wiki.getTiddlerText("T")).toBe("* a\n** b\n** c");
+			r.refresh();
+			key(r, KEYS.tab, {shift: true});
+			expect(wiki.getTiddlerText("T")).toBe("* a\n* b\n* c");
+			r.refresh();
+			rangeOf(r, "* a", "* b");
+			expect(key(r, KEYS.tab).prevented).toBe(true);
+			expect(wiki.getTiddlerText("T")).toBe("* a\n* b\n* c");
+		});
+
+		it("a range with the first block of a section moves up over the heading line together", function() {
+			var wiki = makeWiki([{title: "T", text: "p\n\n! H\n\nx\n\ny\n\nz"}]),
+				r = renderOutline(wiki, "T");
+			rangeOf(r, "x", "y");
+			key(r, KEYS.up, {alt: true});
+			expect(wiki.getTiddlerText("T")).toBe("p\n\nx\n\ny\n\n! H\n\nz");
+		});
+
+		it("a move that would change the order of the range is refused", function() {
+			var wiki = makeWiki([{title: "T", text: "Intro\n\n! A\n\na\n\n! B\n\nb"}]),
+				r = renderOutline(wiki, "T");
+			rangeOf(r, "! A", "! B");
+			expect(key(r, KEYS.up, {alt: true}).prevented).toBe(true);
+			expect(wiki.getTiddlerText("T")).toBe("Intro\n\n! A\n\na\n\n! B\n\nb");
+		});
+
+		it("single-unit operations act on the range's moving end", function() {
+			var wiki = makeWiki([{title: "T", text: "a\n\nb"}]),
+				r = renderOutline(wiki, "T");
+			rangeOf(r, "a", "b");
+			r.widget.operate("convert", "heading1");
+			expect(wiki.getTiddlerText("T")).toBe("a\n\n! b");
+		});
+
+		it("delete asks once and removes the whole range with its subtrees", function() {
+			var wiki = makeWiki([{title: "T", text: "* a\n** a1\n* b\n* c"}]),
+				r = renderOutline(wiki, "T");
+			rangeOf(r, "* a", "* b");
+			key(r, KEYS.del);
+			expect(r.widget.menu.entries[0].action).toBe("delete");
+			r.widget.runMenuEntry(0);
+			expect(wiki.getTiddlerText("T")).toBe("* c");
+		});
+
+		it("a range of all items of a list deletes the list", function() {
+			var wiki = makeWiki([{title: "T", text: "p\n\n* a\n* b\n\nq"}]),
+				r = renderOutline(wiki, "T");
+			rangeOf(r, "* a", "* b");
+			r.widget.operate("deleteUnit");
+			expect(wiki.getTiddlerText("T")).toBe("p\n\nq");
+		});
+
+		it("copy takes the whole span as one clip", function() {
+			var r = renderOutline(makeWiki([{title: "T", text: "* a\n** a1\n* b\n* c"}]), "T");
+			rangeOf(r, "* a", "* b");
+			expect(r.widget.selectedClip()).toEqual({kind: "items", source: "* a\n** a1\n* b"});
+			rangeOf(r, "* b", "* c");
+			r.widget.select(idOf(r, "* b"));
+			expect(r.widget.selectedClip().source).toBe("* b");
+		});
+
+		it("survives a re-render; a range whose ends are no siblings any more collapses", function() {
+			var wiki = makeWiki([{title: "T", text: "a\n\nb\n\nc"}]),
+				r = renderOutline(wiki, "T");
+			r.widget.select(idOf(r, "a"));
+			key(r, KEYS.down, {shift: true});
+			r.widget.mapUnits();
+			expect(sources(r)).toEqual(["a", "b"]);
+			wiki.addTiddler({title: "T", text: "* a\n** x\n\nb\n\nc"});
+			wiki.addTiddler(new $tw.Tiddler(wiki.getTiddler(SEL + "T"), {"anchor-start": "4", "anchor-kind": "item"}));
+			r.refresh();
+			expect(r.widget.rangeIds().length).toBe(1);
+		});
 	});
 });

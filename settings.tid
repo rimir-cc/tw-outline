@@ -19,6 +19,11 @@ Select, edit, move and indent the blocks of a wikitext tiddler in place. See the
 <$transclude $variable="rr-settings-row" label="Undo steps" hint="How many changes made in the outline Ctrl-Z can take back, per tiddler (default 20). The history lives in a temp tiddler for this session only and is dropped when the tiddler is changed elsewhere."><$fill $name="body"><$macrocall $name="rr-config-input" tid="$:/config/rimir/outline/undo-depth" default="20" type="number" size="short"/></$fill></$transclude>
 </$fill></$transclude>
 
+<$transclude $variable="rr-settings-section" title="Names"><$fill $name="body">
+<$transclude $variable="rr-settings-row" label="Externalized parts" hint="Title of a tiddler made by Externalize: $host$ is the tiddler it came from; the first free number from 1 is appended (default $host$/parts/part gives My note/parts/part1)."><$fill $name="body"><$macrocall $name="rr-config-input" tid="$:/config/rimir/outline/name/externalize" default="$host$/parts/part"/></$fill></$transclude>
+<$transclude $variable="rr-settings-row" label="Diagrams" hint="Title of a diagram made by Add to this item: $host$ is the tiddler, $type$ the block type (graphviz, mermaid, ...); the first free number from 1 is appended (default $host$/graphs/$type$ gives My note/graphs/graphviz1)."><$fill $name="body"><$macrocall $name="rr-config-input" tid="$:/config/rimir/outline/name/diagram" default="$host$/graphs/$type$"/></$fill></$transclude>
+</$fill></$transclude>
+
 <$transclude $variable="rr-settings-section" title="Display"><$fill $name="body">
 <$transclude $variable="rr-settings-row" label="Type badges" hint="Small labels next to the units while the outline is awake, in selection and edit mode: all (default) shows every unit's type (paragraph, h2, code-block, bullet, ...), headings only h1 to h6. They take no space and are not part of the text."><$fill $name="body"><$select tiddler="$:/config/rimir/outline/badges" default="all" class="rr-config-select"><option value="all">all</option><option value="headings">headings only</option><option value="off">off</option></$select></$fill></$transclude>
 </$fill></$transclude>

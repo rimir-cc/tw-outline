@@ -231,6 +231,68 @@ describe("outline edit", function() {
 		});
 	});
 
+	describe("externalize", function() {
+		function ext(text, sources, title) {
+			var m = build(text),
+				ids = sources.map(function(src) { return idOf(m, src); });
+			return fmt.externalize(text, m, ids, title || "X");
+		}
+
+		it("a block: a {{...}} line in its place", function() {
+			var r = ext("a\n\nb\n\nc", ["b"]);
+			expect(r.text).toBe("a\n\n{{X}}\n\nc");
+			expect(r.source).toBe("b");
+			expect(r.kind).toBe("transclusion");
+			expect(r.select).toBe(3);
+		});
+
+		it("a heading goes with its section", function() {
+			var r = ext("p\n\n! H\n\nx\n\n!! S\n\ny\n\n! I", ["! H"]);
+			expect(r.text).toBe("p\n\n{{X}}\n\n! I");
+			expect(r.source).toBe("! H\n\nx\n\n!! S\n\ny");
+		});
+
+		it("a whole list and a range of top-level items: {{...}} lines", function() {
+			var text = "p\n\n* a\n* b\n** b1\n* c\n* d", m = build(text),
+				list = m.units.filter(function(u) { return u.kind === "list"; })[0].id;
+			var whole = fmt.externalize(text, m, [list], "X");
+			expect(whole.text).toBe("p\n\n{{X}}");
+			expect(whole.source).toBe("* a\n* b\n** b1\n* c\n* d");
+			var part = ext(text, ["* b", "* c"]);
+			expect(part.text).toBe("p\n\n* a\n\n{{X}}\n\n* d");
+			expect(part.source).toBe("* b\n** b1\n* c");
+		});
+
+		it("sub-items from the parent's first one: a block transclusion at the end of the parent's line", function() {
+			var text = "* a\n** a1\n*** x\n** a2\n** a3\n* b",
+				r = ext(text, ["** a1", "** a2"]);
+			expect(r.text).toBe("* a <$transclude $tiddler=\"X\" $mode=\"block\"/>\n** a3\n* b");
+			expect(r.source).toBe("* a1\n** x\n* a2");
+			expect(r.kind).toBe("item");
+			expect(r.select).toBe(0);
+			var nested = ext("* a\n*# n1\n*# n2", ["*# n1"]);
+			expect(nested.source).toBe("# n1");
+		});
+
+		it("not for sub-items that do not start at the parent's first one, nor for transclusions", function() {
+			var m = build("* a\n** a1\n** a2\n\n{{T}}");
+			expect(fmt.canExternalize(m, [idOf(m, "** a2")])).toBe(false);
+			expect(fmt.canExternalize(m, [idOf(m, "** a1")])).toBe(true);
+			expect(fmt.canExternalize(m, [idOf(m, "{{T}}")])).toBe(false);
+			expect(fmt.externalize(m.text, m, [idOf(m, "** a2")], "X")).toBeNull();
+		});
+
+		it("a title that would break {{...}}: a transclude widget, set apart by blank lines (a line break after it at the end)", function() {
+			var W = "<$transclude $tiddler=\"A|B/parts/part1\" $mode=\"block\"/>";
+			expect(ext("a\n\nb", ["b"], "A|B/parts/part1").text).toBe("a\n\n" + W + "\n");
+			var r = ext("* a\n* b\n* c", ["* b"], "A|B/parts/part1");
+			expect(r.text).toBe("* a\n\n" + W + "\n\n* c");
+			var m = build(r.text);
+			expect(m.units[fmt.externalize ? model.findUnit(m, r.select, "transclusion") : -1].kind).toBe("transclusion");
+			expect(ext("! H\n* a\nPara", ["* a"], "A|B/parts/part1").text).toBe("! H\n\n" + W + "\n\nPara");
+		});
+	});
+
 	describe("typed blocks", function() {
 		var blockTypes = require("$:/plugins/rimir/outline/block-types.js"),
 			types = OWN.concat([{name: "graphviz", caption: "Graphviz graph", badge: "graphviz",

@@ -53,9 +53,6 @@ methods.menuEntries = function(id) {
 		});
 	}
 	var unit = this.units[id].unit;
-	if(unit.kind === "transclusion") {
-		entries.push({group: "", action: "edit", type: "edit"});
-	}
 	this.diagramTargets(id).forEach(function(d) {
 		entries.push({group: "", action: "edit-target", title: d.title, text: self.label("edit-target").replace("$title$", d.title)});
 	});
@@ -71,6 +68,10 @@ methods.menuEntries = function(id) {
 	adapter.convertTypes(this.model, id, types).forEach(function(type) {
 		entries.push({group: "group-convert", action: "convert", type: type, text: captions[type]});
 	});
+	// Last: Alt-Enter, Enter keeps inserting a paragraph
+	if(adapter.canExternalize && adapter.canExternalize(this.model, this.rangeIds())) {
+		entries.push({group: "group-more", action: "externalize", text: this.label("externalize")});
+	}
 	return entries;
 };
 
@@ -142,7 +143,16 @@ methods.deleteSelected = function() {
 	id = this.selectedId;
 	var unit = this.units[id].unit,
 		count = adapter.deleteCount(this.model, id),
-		yes = {group: "group-delete", action: "delete"};
+		yes = {group: "group-delete", action: "delete"},
+		ids = this.rangeIds();
+	// A range: one question for all of it (its units and everything below them)
+	if(ids.length > 1) {
+		var all = ids.length, model = this.model;
+		ids.forEach(function(i) { all += adapter.deleteCount(model, i); });
+		yes.text = this.countLabel("delete-range", "blocks", all);
+		this.showMenu(id, [yes, {group: "group-delete", action: "cancel", type: "cancel"}]);
+		return true;
+	}
 	if(unit.kind === "item" && !unit.children.length && this.wiki.getTiddlerText(QUICK_DELETE) === "yes") {
 		this.operate("deleteUnit");
 		return true;
@@ -263,7 +273,9 @@ methods.runMenuEntry = function(index) {
 		this.select(id);
 	}
 	dom.focus(this.domNode);
-	if(entry.action === "add") {
+	if(entry.action === "externalize") {
+		this.externalizeSelected();
+	} else if(entry.action === "add") {
 		this.startTargetEdit(id, {isNew: true, typeName: entry.type});
 	} else if(entry.action === "edit-target") {
 		this.startTargetEdit(id, {title: entry.title});
@@ -276,8 +288,6 @@ methods.runMenuEntry = function(index) {
 		return;
 	} else if(entry.action === "delete") {
 		this.operate("deleteUnit", entry.arg);
-	} else if(entry.action === "edit") {
-		this.startEdit(id);
 	} else if(entry.action === "insert") {
 		this.startEdit(id, {isNew: true, blockType: entry.type, where: entry.where});
 	} else {

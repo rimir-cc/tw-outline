@@ -361,6 +361,18 @@ function typeOf(name, types) {
 	return null;
 }
 
+/*
+Reference to tiddler `title`: {{title}}, or a transclude widget (block mode unless `inline`) when the title would break
+that syntax ({, }, |, !! or ##) or `widget` is set. Its attribute quotes are ones the title does not contain.
+*/
+exports.referenceTo = function(title, inline, widget) {
+	if(!widget && !/[{}|]|!!|##/.test(title)) {
+		return "{{" + title + "}}";
+	}
+	var q = title.indexOf("\"") === -1 ? "\"" : (title.indexOf("'") === -1 ? "'" : "\"\"\"");
+	return "<$transclude $tiddler=" + q + title + q + (inline ? "" : " $mode=\"block\"") + "/>";
+};
+
 // Unit kind a block type produces ("item" for list types), or null
 exports.blockTypeKind = function(type, types) {
 	var t = typeOf(type, types);
@@ -717,6 +729,111 @@ exports.deleteUnit = function(text, model, id, mode) {
 	result = cut(text, model, u, u.subtreeEnd);
 	result.removed = subtreeIds(model, u);
 	return result;
+};
+
+/*
+Delete a range of siblings (`ids`, document order) with their subtrees, as deleteUnit does for one unit; all items of a
+list delete the list. result.removed: every removed unit.
+*/
+exports.deleteRange = function(text, model, ids) {
+	if(ids.length === 1) {
+		return exports.deleteUnit(text, model, ids[0]);
+	}
+	var first = model.units[ids[0]],
+		last = model.units[ids[ids.length - 1]],
+		parent = first.parent === -1 ? null : model.units[first.parent];
+	if(parent && parent.kind === "list" && parent.children.length === ids.length) {
+		return exports.deleteUnit(text, model, parent.id);
+	}
+	var result = cut(text, model, first, last.subtreeEnd);
+	result.removed = [];
+	ids.forEach(function(id) { result.removed = result.removed.concat(subtreeIds(model, model.units[id])); });
+	return result;
+};
+
+/*
+Externalize (outline-keys externalizeSelected): units `ids` (one, or a range of siblings) move into a new tiddler `title`.
+Not for transclusion units, nor for sub-items that do not start at their parent item's first sub-item (the parent's line
+takes the reference, so the order would change).
+*/
+exports.canExternalize = function(model, ids) {
+	var first = ids.length ? model.units[ids[0]] : null;
+	if(!first || ids.some(function(id) { return !model.units[id] || model.units[id].kind === "transclusion"; })) {
+		return false;
+	}
+	if(first.kind === "item" && first.level > 1) {
+		var parent = model.units[first.parent],
+			items = parent ? parent.children.filter(function(c) { return model.units[c].kind === "item"; }) : [];
+		return !!parent && parent.kind === "item" && items[0] === first.id;
+	}
+	return true;
+};
+
+/*
+Returns {text, select, kind, source}: `source` is the units' text with their subtrees (list items shifted to level 1:
+their first level - 1 marker characters cut); in `text` it is replaced by a reference (referenceTo): sub-items lose
+their lines and their parent item's line ends with a block transclusion (it renders as the parent's nested list, before
+its remaining sub-items); anything else becomes a reference line. Null when not allowed (canExternalize).
+*/
+exports.externalize = function(text, model, ids, title) {
+	if(!exports.canExternalize(model, ids)) { return null; }
+	var first = model.units[ids[0]],
+		last = model.units[ids[ids.length - 1]],
+		start = first.start,
+		end = last.subtreeEnd,
+		source = text.substring(start, end);
+	if(first.kind === "item" && first.level > 1) {
+		var shift = first.level - 1;
+		ids.forEach(function(id) {
+			subtreeItems(model, model.units[id]).forEach(function(x) {
+				x.cutAt = x.start - start;
+			});
+		});
+		model.units.filter(function(x) { return x.cutAt !== undefined; }).sort(function(a, b) { return b.cutAt - a.cutAt; })
+			.forEach(function(x) {
+				source = source.substring(0, x.cutAt) + source.substring(x.cutAt + shift);
+				delete x.cutAt;
+			});
+		var parent = model.units[first.parent],
+			after = /^\r?\n/.exec(text.substring(end)),
+			removeFrom = after ? start : start - (/\r?\n$/.exec(text.substring(0, start)) || [""])[0].length,
+			removeTo = after ? end + after[0].length : end,
+			rest = utils.splice(text, removeFrom, removeTo, "");
+		return {
+			// Inside the parent's line {{...}} would be inline: the list needs block mode
+			text: utils.splice(rest, parent.end, parent.end, " " + exports.referenceTo(title, false, true)),
+			select: parent.start,
+			kind: "item",
+			source: source
+		};
+	}
+	// The reference line is set apart by blank lines; a transclude widget also needs a line break after it at the end
+	// (otherwise it is inline and the lines around it become a paragraph)
+	var nl = utils.eol(text),
+		ref = exports.referenceTo(title, false),
+		before = text.substring(0, start),
+		after = text.substring(end),
+		head = /\S/.test(before) ? before.replace(/\s+$/, "") + nl + nl : "",
+		tail = /\S/.test(after) ? nl + nl + after.replace(/^\s+/, "") : (ref.charAt(0) === "<" ? nl : after);
+	return {
+		text: head + ref + tail,
+		select: head.length,
+		kind: "transclusion",
+		source: source
+	};
+};
+
+/*
+The clip of a range of siblings: the source from the first unit's start to the last one's subtree end; kind "items"
+when they are items, "heading" when they are headings, else "block".
+*/
+exports.rangeClip = function(text, model, ids) {
+	var units = ids.map(function(id) { return model.units[id]; }),
+		all = function(kind) { return units.every(function(u) { return u.kind === kind; }); };
+	return {
+		kind: all("item") ? "items" : (all("heading") ? "heading" : "block"),
+		source: text.substring(units[0].start, units[units.length - 1].subtreeEnd)
+	};
 };
 
 /*

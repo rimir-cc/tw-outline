@@ -1,5 +1,7 @@
 title: $:/config/shortcuts/
 
+outline-extend-up: shift-Up
+outline-extend-down: shift-Down
 outline-up: Up
 outline-down: Down
 outline-up-deep: ctrl-Up
@@ -12,7 +14,7 @@ outline-indent: Tab
 outline-promote: shift-Tab
 outline-edit: Enter
 outline-menu: alt-Enter
-outline-open: Enter
+outline-open: shift-Enter
 outline-add: ctrl-Enter
 outline-clear: Escape
 outline-save: ctrl-Enter

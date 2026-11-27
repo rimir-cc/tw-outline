@@ -1,5 +1,7 @@
 title: $:/config/ShortcutInfo/
 
+outline-extend-up: Outline: extend the selection to the previous sibling (a range; Shift-Click selects up to a sibling)
+outline-extend-down: Outline: extend the selection to the next sibling (a range; Shift-Click selects up to a sibling)
 outline-up: Outline: select the previous unit (a list above is selected as a whole)
 outline-down: Outline: select the next unit (a whole list counts as one block)
 outline-up-deep: Outline: select the previous unit, also inside lists
@@ -12,7 +14,7 @@ outline-indent: Outline: indent the selected unit and its subtree by one level
 outline-promote: Outline: promote the selected unit and its subtree by one level
 outline-edit: Outline: edit the selected unit in place
 outline-menu: Outline: block menu - insert a new block after or before the selected unit, or turn it into another type (in the editor: turn the edited unit into another type)
-outline-open: Outline: open the transcluded tiddler of the selected unit in outline mode
+outline-open: Outline: open the tiddler the selected unit transcludes (a {{...}} line, or a bullet with one) in outline mode; a diagram: its source in place
 outline-add: Outline: edit a new empty unit below the selected one (a list item: an item on its level; anything else: a paragraph)
 outline-clear: Outline: clear the selection; with nothing selected, put the outline to sleep
 outline-save: Outline editor: save the edit

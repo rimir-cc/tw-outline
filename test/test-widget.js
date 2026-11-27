@@ -293,6 +293,18 @@ describe("outline widget", function() {
 		});
 	});
 
+	it("a list item that is only a transclusion is marked (orange frame); sleep removes the mark", function() {
+		var wiki = makeWiki([{title: "T", text: "* {{X}}\n* <$transclude $tiddler=\"X\"/>\n*   {{X}}  \n* a {{X}}\n* {{X}} {{Y}}"},
+				{title: "X", text: "x"}, {title: "Y", text: "y"}]),
+			r = renderOutline(wiki, "T"),
+			marks = r.widget.units.filter(function(e) { return e.unit.kind === "item"; }).map(function(e) {
+				return e.domNodes[0].getAttribute("data-ol-only-transclusion") || "";
+			});
+		expect(marks).toEqual(["yes", "yes", "yes", "", ""]);
+		r.widget.sleep();
+		expect(r.container.innerHTML).not.toContain("data-ol-only-transclusion");
+	});
+
 	it("renders empty tiddler", function() {
 		var wiki = makeWiki([{title: "T", text: ""}]);
 		var r;

@@ -21,6 +21,8 @@ Key overview: toggleHelp sets/deletes $:/temp/rimir/outline/help/<title>; ui/bod
 var formats = require("$:/plugins/rimir/outline/formats.js"),
 	findUnit = require("$:/plugins/rimir/outline/model.js").findUnit,
 	checkOp = require("$:/plugins/rimir/outline/model.js").checkOp,
+	buildModel = require("$:/plugins/rimir/outline/model.js").buildModel,
+	mapPosition = require("$:/plugins/rimir/outline/text-utils.js").mapPosition,
 	dom = require("$:/plugins/rimir/outline/dom-utils.js"),
 	blockTypes = require("$:/plugins/rimir/outline/block-types.js"),
 	setClass = dom.setClass,
@@ -45,6 +47,8 @@ so Tab never moves the focus away from a selection. In read-only wikis only up/d
 on US layouts).
 */
 var ACTIONS = [
+	{name: "outline-extend-up", run: function(w) { return w.extendSelection(-1); }},
+	{name: "outline-extend-down", run: function(w) { return w.extendSelection(1); }},
 	{name: "outline-up", run: function(w) { return w.step(-1); }},
 	{name: "outline-down", run: function(w) { return w.step(1); }},
 	{name: "outline-up-deep", run: function(w) { return w.step(-1, true); }},
@@ -69,6 +73,9 @@ var ACTIONS = [
 
 var methods = {};
 
+// Operations that run on a range as one step per unit (operateRange)
+var RANGE_STEPS = {move: true, indent: true, promote: true};
+
 /* ---------- selection ---------- */
 
 methods.selectionTitle = function() {
@@ -86,8 +93,67 @@ methods.select = function(id) {
 		return false;
 	}
 	var unit = this.units[id].unit;
+	this.rangeAnchor = -1;
 	this.saveSelection(unit.start, id, unit.kind);
 	this.showSelection(id);
+	return true;
+};
+
+/*
+Ranges: siblings (the selectable children of the same parent, or the roots) from the anchor (this.rangeAnchor) to the
+selected unit (the moving end). A unit's subtree goes along with it. The selection tiddler keeps the anchor as
+anchor-start / anchor-kind next to the selected unit's start / index / kind.
+*/
+methods.siblingsOf = function(id) {
+	var model = this.model,
+		parent = model.units[id].parent,
+		self = this;
+	return (parent === -1 ? model.roots : model.units[parent].children).filter(function(i) {
+		return self.isSelectable(i);
+	});
+};
+
+// Ids of the selected units in document order: the range, or the selected unit alone ([] without a selection)
+methods.rangeIds = function() {
+	var id = this.selectedId;
+	if(id === -1) {
+		return [];
+	}
+	var sibs = this.rangeAnchor === -1 || this.rangeAnchor === id ? [] : this.siblingsOf(id),
+		a = sibs.indexOf(this.rangeAnchor),
+		b = sibs.indexOf(id);
+	if(a === -1 || b === -1) {
+		return [id];
+	}
+	return sibs.slice(Math.min(a, b), Math.max(a, b) + 1);
+};
+
+// Select the siblings from `anchor` to `focus` (focus is the selected unit); a single unit when they are the same
+methods.selectRange = function(anchor, focus) {
+	if(!this.isSelectable(focus) || (anchor !== focus && this.siblingsOf(focus).indexOf(anchor) === -1)) {
+		return this.select(focus);
+	}
+	var unit = this.units[focus].unit,
+		a = this.units[anchor].unit;
+	this.rangeAnchor = anchor === focus ? -1 : anchor;
+	this.saveSelection(unit.start, focus, unit.kind, this.rangeAnchor === -1 ? null : {start: a.start, kind: a.kind});
+	this.showSelection(focus);
+	return true;
+};
+
+// Shift-Up/Down: extend (or shrink) the range by the previous / next sibling; stays at the first / last one
+methods.extendSelection = function(dir) {
+	this.ensureCurrent();
+	var id = this.selectedId;
+	if(id === -1) {
+		return false;
+	}
+	var sibs = this.siblingsOf(id),
+		next = sibs[sibs.indexOf(id) + dir];
+	if(next !== undefined) {
+		this.selectRange(this.rangeAnchor === -1 ? id : this.rangeAnchor, next);
+		scrollIntoView(dom.firstShown(this.units[next].domNodes));
+	}
 	return true;
 };
 
@@ -95,17 +161,23 @@ methods.clearSelection = function() {
 	if(this.selectedId === -1) {
 		return false;
 	}
+	// A range collapses to its moving end first
+	if(this.rangeIds().length > 1) {
+		return this.select(this.selectedId);
+	}
 	this.wiki.deleteTiddler(this.selectionTitle());
 	this.showSelection(-1);
 	return true;
 };
 
-methods.saveSelection = function(start, index, kind) {
+methods.saveSelection = function(start, index, kind, anchor) {
 	this.wiki.addTiddler(new $tw.Tiddler({
 		title: this.selectionTitle(),
 		start: String(start),
 		index: String(index),
-		kind: kind || ""
+		kind: kind || "",
+		"anchor-start": anchor ? String(anchor.start) : undefined,
+		"anchor-kind": anchor ? anchor.kind || "" : undefined
 	}));
 };
 
@@ -164,7 +236,15 @@ methods.showSelection = function(id) {
 			this.positionMenu();
 		}
 	}
-	this.selectedNodes = id === -1 ? [] : this.units[id].domNodes.slice();
+	if(id === -1) {
+		this.rangeAnchor = -1;
+	}
+	var units = this.units,
+		nodes = [];
+	$tw.utils.each(this.rangeIds(), function(i) {
+		nodes = nodes.concat(units[i].domNodes);
+	});
+	this.selectedNodes = nodes;
 	$tw.utils.each(this.selectedNodes, function(node) {
 		setClass(node, SELECTED_CLASS, true);
 	});
@@ -231,7 +311,21 @@ methods.drawSelectionBox = function() {
 
 // Re-apply the saved selection after (re-)mapping
 methods.restoreSelection = function() {
-	this.showSelection(this.resolveSelection());
+	var id = this.resolveSelection(),
+		state = this.wiki.getTiddler(this.selectionTitle()),
+		self = this,
+		anchor = -1;
+	// The range's other end, when it is still a sibling of the selected unit
+	if(id !== -1 && state && state.fields["anchor-start"] !== undefined) {
+		anchor = findUnit(this.model, parseInt(state.fields["anchor-start"], 10), state.fields["anchor-kind"], function(i) {
+			return self.isSelectable(i);
+		});
+		if(anchor === id || this.siblingsOf(id).indexOf(anchor) === -1) {
+			anchor = -1;
+		}
+	}
+	this.rangeAnchor = anchor;
+	this.showSelection(id);
 };
 
 // Select the previous (-1) or next (1) selectable unit. Without a selection: the first or last one.
@@ -332,21 +426,37 @@ methods.lastSelectable = function() {
 
 /* ---------- operations ---------- */
 
-// Enter on a transclusion unit: open the transcluded tiddler in outline mode (openTarget: outline-editor.js)
+// Shift-Enter (outline-open): open the tiddler the selected unit transcludes in outline mode (openTarget: outline-editor.js)
 methods.openTransclusion = function() {
 	var id = this.selectedId;
-	if(id === -1 || this.units[id].unit.kind !== "transclusion") {
+	if(id === -1) {
+		return false;
+	}
+	var unit = this.units[id].unit,
+		target = unit.kind === "transclusion" ? unit.target : firstTransclusion(this.model.text.substring(unit.start, unit.end)),
+		tiddler = target ? this.wiki.getTiddler(target) : null;
+	if(!target) {
 		return false;
 	}
 	// A diagram (a tiddler of a registered typed block type) is edited in place (startTargetEdit: outline-editor.js)
-	var diagrams = this.diagramTargets(id);
-	if(diagrams.length) {
-		this.startTargetEdit(id, {title: diagrams[0].title});
+	if(tiddler && blockTypes.typeForContentType(this.wiki, tiddler.fields.type) && this.startTargetEdit(id, {title: target})) {
 		return true;
 	}
-	this.openTarget(this.units[id].unit.target);
+	this.openTarget(target);
 	return true;
 };
+
+// Title of the first transclusion in `source` ({{title}}, {{title!!field}}, {{title||template}}, or a transclude widget
+// with a literal $tiddler / tiddler attribute), or null
+function firstTransclusion(source) {
+	var braces = /\{\{([^{}|]+?)(?:!!|##|\|\||\}\})/.exec(source),
+		widget = /<\$transclude\b[^>]*?\s\$?tiddler=(?:"([^"]*)"|'([^']*)'|\[\[([^\]]*)\]\]|([^\s\/>"']+))/.exec(source),
+		first = braces && (!widget || braces.index < widget.index) ? braces : widget;
+	if(!first) {
+		return null;
+	}
+	return first === braces ? braces[1].trim() : (widget[1] || widget[2] || widget[3] || widget[4]);
+}
 
 // The data-ol-diagram-target element (a diagram transclusion, see mapDiagrams) node is in, or null
 function diagramNodeOf(node, root) {
@@ -377,9 +487,25 @@ methods.operate = function(name, arg) {
 	id = this.selectedId;
 	var tiddler = this.wiki.getTiddler(this.tiddlerTitle),
 		text = tiddler.fields.text || "",
-		adapter = formats.getFormat(tiddler.fields.type);
+		adapter = formats.getFormat(tiddler.fields.type),
+		ids = this.rangeIds();
 	if(!adapter || !adapter[name]) {
 		return true;
+	}
+	if(ids.length > 1) {
+		if(RANGE_STEPS[name]) {
+			return this.operateRange(name, arg, ids, tiddler, adapter);
+		}
+		if(name === "deleteUnit" && adapter.deleteRange) {
+			var removed = adapter.deleteRange(text, this.model, ids);
+			if(removed && checkOp(this.wiki, this.model, ids[0], name, removed.text, this.tiddlerTitle, removed)) {
+				this.rangeAnchor = -1;
+				this.applyResult(removed);
+			}
+			return true;
+		}
+		// Other operations act on the range's moving end (the selected unit), like Enter and the block menu
+		this.select(id);
 	}
 	var result = adapter[name](text, this.model, id, arg, blockTypes.getBlockTypes(this.wiki));
 	// Guard: never write a result that changes units the operation must leave alone
@@ -396,6 +522,82 @@ and that change has not been rendered yet, the body is rebuilt first. If the cha
 (a key pressed before the refresh after a write), the rebuilt mapping and the restored selection are valid and
 the result is true; after any other change it is false (positions are not trusted for a write: do nothing).
 */
+/*
+Externalize the selected unit or range (block menu): its text goes into a new wikitext tiddler (newTiddlerTitle
+"externalize"), a reference takes its place (the adapter's externalize). One write of this tiddler (one undo step);
+the new tiddler stays on undo. The reference is selected.
+*/
+methods.externalizeSelected = function() {
+	var adapter = this.getAdapter();
+	if(this.selectedId === -1 || this.isReadOnly() || this.editor || !adapter || !adapter.externalize || !this.ensureCurrent()) {
+		return false;
+	}
+	var ids = this.rangeIds(),
+		tiddler = this.wiki.getTiddler(this.tiddlerTitle),
+		text = tiddler ? (tiddler.fields.text || "") : "",
+		title = this.newTiddlerTitle("externalize"),
+		result = tiddler ? adapter.externalize(text, this.model, ids, title) : null;
+	if(!result) {
+		return true;
+	}
+	this.wiki.addTiddler(new $tw.Tiddler(this.wiki.getCreationFields(), {title: title, type: "text/vnd.tiddlywiki",
+		text: result.source}, this.wiki.getModificationFields()));
+	this.rangeAnchor = -1;
+	this.writeText(tiddler, result.text);
+	this.saveSelection(result.select, ids[0], result.kind);
+	return true;
+};
+
+/*
+Move, indent or promote a range (`ids`, siblings in document order): the single-unit operation for each unit, the
+first one first (the last one first for a move down), each on the model of the text before it and checked like a
+single operation; the other units' starts follow each change (mapPosition). All or nothing: one write (one undo step),
+the range stays selected. Always consumed.
+*/
+methods.operateRange = function(name, arg, ids, tiddler, adapter) {
+	var wiki = this.wiki,
+		title = this.tiddlerTitle,
+		types = blockTypes.getBlockTypes(wiki),
+		text = tiddler.fields.text || "",
+		model = this.model,
+		units = ids.map(function(id) { return {start: model.units[id].start, kind: model.units[id].kind}; }),
+		order = units.map(function(u, i) { return i; });
+	if(name === "move" && arg > 0) {
+		order.reverse();
+	}
+	for(var k = 0; k < order.length; k++) {
+		var i = order[k],
+			id = findUnit(model, units[i].start, units[i].kind),
+			result = id === -1 ? null : adapter[name](text, model, id, arg, types);
+		if(!result || !checkOp(wiki, model, id, name, result.text, title, result)) {
+			return true;
+		}
+		for(var j = 0; j < units.length; j++) {
+			units[j].start = j === i ? result.select : mapPosition(text, result.text, units[j].start);
+			if(units[j].start === -1) {
+				return true;
+			}
+		}
+		text = result.text;
+		model = buildModel(wiki, text, title);
+	}
+	// The range must stay in its order (a heading moving over the block above it takes that block into its section,
+	// and the next heading would then swap with that section): otherwise nothing is written
+	for(var n = 1; n < units.length; n++) {
+		if(units[n].start <= units[n - 1].start) {
+			return true;
+		}
+	}
+	var focus = ids.indexOf(this.selectedId),
+		anchor = ids.indexOf(this.rangeAnchor);
+	if(text !== (tiddler.fields.text || "")) {
+		this.writeText(tiddler, text);
+	}
+	this.saveSelection(units[focus].start, this.selectedId, units[focus].kind,
+		anchor === -1 ? null : {start: units[anchor].start, kind: units[anchor].kind});
+	return true;
+};
+
 methods.ensureCurrent = function() {
 	var tiddler = this.wiki.getTiddler(this.tiddlerTitle),
 		text = tiddler ? (tiddler.fields.text || "") : "";
@@ -546,6 +748,19 @@ methods.handleClick = function(event) {
 		}
 	}
 	var id = this.unitIdAt(node);
+	// Shift-Click: the range from the anchor (or the selected unit) to the clicked sibling
+	if(id !== -1 && event.shiftKey && this.selectedId !== -1) {
+		event.preventDefault();
+		// The browser extended its text selection on mousedown; it would take over Ctrl-C / Ctrl-X
+		var view = this.document.defaultView;
+		if(view && view.getSelection) {
+			view.getSelection().removeAllRanges();
+		}
+		if(this.selectRange(this.rangeAnchor === -1 ? this.selectedId : this.rangeAnchor, id)) {
+			focus(this.domNode);
+		}
+		return;
+	}
 	if(id !== -1 && this.select(id) && !isEditable(event.target)) {
 		focus(this.domNode);
 	}

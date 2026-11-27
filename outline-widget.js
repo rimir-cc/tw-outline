@@ -33,7 +33,9 @@ var Widget = require("$:/core/modules/widgets/widget.js").widget,
 	dom = require("$:/plugins/rimir/outline/dom-utils.js"),
 	blockTypes = require("$:/plugins/rimir/outline/block-types.js");
 
-var AWAKE_CLASS = "rr-ol-awake",
+// One {{...}} or one <$transclude .../> and nothing else (an item's content, see stamp)
+var ONLY_TRANSCLUSION = /^\s*(?:\{\{[^{}]+\}\}|<\$transclude\b[^>]*\/>)\s*$/,
+	AWAKE_CLASS = "rr-ol-awake",
 	MARKER_TIDDLER = "$:/plugins/rimir/outline/ui/transclusion-marker",
 	EMPTY_HINT = "$:/plugins/rimir/outline/language/block/empty-hint",
 	LIST_TAGS = {ul: true, ol: true, dl: true, blockquote: true},
@@ -199,6 +201,8 @@ OutlineWidget.prototype.execute = function() {
 	this.units = [];
 	this.markers = [];
 	this.selectedId = -1;
+	// The other end of a range of siblings (Shift-Up/Down, Shift-Click), -1 for a single unit (see rangeIds)
+	this.rangeAnchor = -1;
 	this.selectedNodes = [];
 	this.selectionBox = null;
 	this.menu = null;
@@ -344,6 +348,7 @@ OutlineWidget.prototype.clearStamps = function() {
 			node.removeAttribute("data-ol-start");
 			node.removeAttribute("data-ol-type");
 			node.removeAttribute("data-ol-typed");
+			node.removeAttribute("data-ol-only-transclusion");
 		});
 	});
 	$tw.utils.each(this.markers, function(marker) {
@@ -422,6 +427,10 @@ OutlineWidget.prototype.stamp = function(entry) {
 		entry.domNodes[0].setAttribute("data-ol-type", typed ? typed.badge : dom.unitType(unit.kind, entry.domNodes[0]));
 		if(typed) {
 			entry.domNodes[0].setAttribute("data-ol-typed", "yes");
+		}
+		// A list item whose content is only a transclusion: another tiddler's content, framed like a transclusion
+		if(unit.kind === "item" && adapter && ONLY_TRANSCLUSION.test(adapter.editSource(this.model.text, this.model, unit.id))) {
+			entry.domNodes[0].setAttribute("data-ol-only-transclusion", "yes");
 		}
 	}
 	if(unit.kind === "transclusion" && entry.domNodes.length) {

@@ -389,7 +389,7 @@ describe("outline editor", function() {
 				"insert:bulleted", "insert:numbered", "insert:quote", "insert:quote-block", "insert:code"];
 			expect(labels(r)).toEqual(inserts.concat(inserts, [
 				"convert:heading1", "convert:heading2", "convert:heading3", "convert:bulleted", "convert:numbered",
-				"convert:quote", "convert:quote-block", "convert:code"]));
+				"convert:quote", "convert:quote-block", "convert:code", "externalize:undefined"]));
 			expect(r.widget.menu.entries[9].group).toBe("group-insert-before");
 			expect(r.widget.menu.entries[9].where).toBe("before");
 			expect(hasClass(r.widget.menu.node, "rr-ol-menu")).toBe(true);
@@ -400,7 +400,7 @@ describe("outline editor", function() {
 			r.widget.select(r.idOf("* a"));
 			press(r, 13, {alt: true});
 			expect(labels(r)).toEqual(inserts.concat(inserts, ["convert:paragraph", "convert:heading1", "convert:heading2",
-				"convert:heading3", "convert:numbered", "convert:quote", "convert:quote-block", "convert:code"]));
+				"convert:heading3", "convert:numbered", "convert:quote", "convert:quote-block", "convert:code", "externalize:undefined"]));
 		});
 
 		it("follows the block type tiddlers: an untagged override drops the type from insert and turn into", function() {
@@ -628,18 +628,18 @@ describe("outline editor", function() {
 				choose(r, "add", "diag");
 				expect(r.widget.editor.target.isNew).toBe(true);
 				expect(r.wiki.getTiddlerText(BUF + "T")).toBe("s");
-				expect(r.wiki.tiddlerExists("Build pipeline (x)")).toBe(false);
+				expect(r.wiki.tiddlerExists("T/graphs/diag1")).toBe(false);
 				r.type("graph");
 				r.widget.saveEdit();
-				var g = r.wiki.getTiddler("Build pipeline (x)");
+				var g = r.wiki.getTiddler("T/graphs/diag1");
 				expect(g.fields.type).toBe("text/plain");
 				expect(g.fields.text).toBe("graph");
-				expect(r.wiki.getTiddlerText("T")).toBe("* Build pipeline {{Build pipeline (x)}}\n* b");
+				expect(r.wiki.getTiddlerText("T")).toBe("* Build pipeline {{T/graphs/diag1}}\n* b");
 				expect(r.widget.editor).toBe(null);
 				r.refresh();
 				r.widget.undoStep(true);
 				expect(r.wiki.getTiddlerText("T")).toBe("* Build pipeline\n* b");
-				expect(r.wiki.tiddlerExists("Build pipeline (x)")).toBe(true);
+				expect(r.wiki.tiddlerExists("T/graphs/diag1")).toBe(true);
 			});
 
 			it("a new block of a type with a starter text opens with it", function() {
@@ -660,16 +660,25 @@ describe("outline editor", function() {
 				r.widget.cancelEdit();
 				expect(r.widget.editor).toBe(null);
 				expect(r.wiki.getTiddlerText("T")).toBe("* a\n* b");
-				expect(r.wiki.tiddlerExists("a (x)")).toBe(false);
+				expect(r.wiki.tiddlerExists("T/graphs/diag1")).toBe(false);
 			});
 
-			it("names the new diagram after the item's plain text, unique; the host title when the item has none", function() {
-				var r = render("* //Build// [[pipe|Pipe]] {{O}}\n* {{O}}", [TYPE, {title: "Build pipe (x)", text: "taken"}, {title: "O", text: "o"}]);
-				expect(r.widget.newDiagramTitle(r.idOf("* //Build// [[pipe|Pipe]] {{O}}"), "x")).toBe("Build pipe (x) 1");
-				expect(r.widget.newDiagramTitle(r.idOf("* {{O}}"), "x")).toBe("T (x)");
-				var words = "* " + new Array(12).join("word ").trim(),
-					long = render(words + "\n* b", [TYPE]);
-				expect(long.widget.newDiagramTitle(long.idOf(words), "x")).toBe("word word word word word word word word (x)");
+			it("names new tiddlers from the config templates, with the first free number", function() {
+				var r = render("* a\n* b", [TYPE, {title: "T/graphs/diag1", text: "taken"}]);
+				expect(r.widget.newTiddlerTitle("diagram", {type: "diag"})).toBe("T/graphs/diag2");
+				expect(r.widget.newTiddlerTitle("externalize")).toBe("T/parts/part1");
+				r.wiki.addTiddler({title: "$:/config/rimir/outline/name/diagram", text: "$host$/x/$type$-"});
+				expect(r.widget.newTiddlerTitle("diagram", {type: "diag"})).toBe("T/x/diag-1");
+			});
+
+			it("a reference is {{title}}, or a transclude widget for a title that would break it", function() {
+				var fmt = require("$:/plugins/rimir/outline/format-wikitext.js");
+				expect(fmt.referenceTo("x", false)).toBe("{{x}}");
+				expect(fmt.referenceTo("x", true)).toBe("{{x}}");
+				expect(fmt.referenceTo("A|B/parts/part1", false)).toBe("<$transclude $tiddler=\"A|B/parts/part1\" $mode=\"block\"/>");
+				expect(fmt.referenceTo("A{B}", true)).toBe("<$transclude $tiddler=\"A{B}\"/>");
+				expect(fmt.referenceTo("a\"b!!c", true)).toBe("<$transclude $tiddler='a\"b!!c'/>");
+				expect(fmt.referenceTo("a##b", true)).toBe("<$transclude $tiddler=\"a##b\"/>");
 			});
 
 			it("edit a transcluded diagram from the item's menu; escape changes nothing", function() {
@@ -692,6 +701,22 @@ describe("outline editor", function() {
 				expect(r.wiki.getTiddlerText("G")).toBe("h");
 			});
 
+			it("enter edits a transclusion line, also a block-level {{...}}; shift-enter on a diagram edits its source", function() {
+				var r = render("para\n\n{{W}}\n\n{{G}}", [TYPE, {title: "W", text: "w"}, {title: "G", type: "text/plain", text: "g"}]);
+				r.widget.select(r.idOf("{{W}}"));
+				press(r, 13);
+				expect(r.widget.editor && !r.widget.editor.target).toBe(true);
+				expect(r.wiki.getTiddlerText(BUF + "T")).toBe("{{W}}");
+				r.widget.cancelEdit();
+				r.widget.select(r.idOf("{{G}}"));
+				press(r, 13, {shift: true});
+				expect(r.widget.editor.target.title).toBe("G");
+				r.widget.cancelEdit();
+				// No "Edit this line" entry any more
+				press(r, 13, {alt: true});
+				expect(r.widget.menu.entries.some(function(e) { return e.action === "edit"; })).toBe(false);
+			});
+
 			it("double-click on a diagram in an item opens its editor; Enter on a block-level diagram too", function() {
 				var r = render("* a {{G}}\n* b\n\n{{G}}\n\n{{W}}", [TYPE, {title: "G", type: "text/plain", text: "g"}, {title: "W", text: "w"}]);
 				var node = r.widget.diagramTargets(r.idOf("* a {{G}}"))[0].node;
@@ -699,7 +724,7 @@ describe("outline editor", function() {
 				expect(r.widget.editor.target.title).toBe("G");
 				r.widget.cancelEdit();
 				r.widget.select(r.idOf("{{G}}"));
-				press(r, 13);
+				press(r, 13, {shift: true});
 				expect(r.widget.editor && r.widget.editor.target && r.widget.editor.target.title).toBe("G");
 				r.widget.cancelEdit();
 			});
@@ -722,10 +747,30 @@ describe("outline editor", function() {
 				expect(r.widget.startTargetEdit(r.idOf("{{W}}"), {title: "W"})).toBe(false);
 			});
 
-			it("a diagram name never breaks its {{...}} reference", function() {
-				var r = render("* Option A | Option B\n* Done!! next {x}\n* c", [TYPE]);
-				expect(r.widget.newDiagramTitle(r.idOf("* Option A | Option B"), "x")).toBe("Option A Option B (x)");
-				expect(r.widget.newDiagramTitle(r.idOf("* Done!! next {x}"), "x")).toBe("Done! next x (x)");
+			it("externalize from the block menu: a new tiddler, the reference selected, one undo step", function() {
+				var r = render("a\n\nb\n\nc");
+				r.widget.select(r.idOf("b"));
+				r.widget.selectRange(r.idOf("b"), r.idOf("c"));
+				press(r, 13, {alt: true});
+				var i = r.widget.menu.entries.findIndex(function(e) { return e.action === "externalize"; });
+				expect(i).toBe(r.widget.menu.entries.length - 1);
+				r.widget.setMenuActive(i);
+				press(r, 13);
+				expect(r.wiki.getTiddlerText("T")).toBe("a\n\n{{T/parts/part1}}");
+				expect(r.wiki.getTiddler("T/parts/part1").fields.text).toBe("b\n\nc");
+				r.refresh();
+				expect(r.widget.units[r.widget.selectedId].unit.kind).toBe("transclusion");
+				r.widget.undoStep(true);
+				expect(r.wiki.getTiddlerText("T")).toBe("a\n\nb\n\nc");
+				expect(r.wiki.tiddlerExists("T/parts/part1")).toBe(true);
+			});
+
+			it("no externalize entry for sub-items in the middle", function() {
+				var r = render("* a\n** a1\n** a2\n* b");
+				r.widget.select(r.idOf("** a2"));
+				press(r, 13, {alt: true});
+				expect(labels(r)).not.toContain("externalize:undefined");
+				expect(r.widget.menu.entries.some(function(e) { return e.action === "externalize"; })).toBe(false);
 			});
 
 			it("a template type appends its template with the content to the item", function() {
@@ -1016,7 +1061,7 @@ describe("outline editor", function() {
 		var events = [];
 		spyOn(r.widget, "dispatchEvent").and.callFake(function(ev) { events.push(ev); });
 		r.widget.select(r.idOf("{{X}}"));
-		var ev = {keyCode: 13, shiftKey: false, altKey: false, ctrlKey: false, metaKey: false,
+		var ev = {keyCode: 13, shiftKey: true, altKey: false, ctrlKey: false, metaKey: false,
 			target: r.widget.domNode, defaultPrevented: false, prevented: false,
 			preventDefault: function() { this.prevented = true; }, stopPropagation: function() {}};
 		r.widget.handleKeydown(ev);

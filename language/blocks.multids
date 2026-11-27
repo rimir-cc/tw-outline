@@ -1,11 +1,12 @@
 title: $:/plugins/rimir/outline/language/block/
 
-edit: Edit this line
 group-insert: Insert after
 group-insert-before: Insert before
 empty-hint: Empty. Enter writes a first paragraph, Alt-Enter offers headings, lists and other blocks.
 group-convert: Turn into
 group-add: Add to this item
+group-more: More
+externalize: Externalize (into its own tiddler)
 edit-target: Edit $title$
 group-delete: Delete?
 delete: Yes, delete
@@ -14,6 +15,7 @@ delete-list: Yes, the whole list ($counted$)
 delete-children: Yes, with its sub-items ($counted$)
 delete-container: Yes, with its contents ($counted$)
 delete-own: Just the heading
+delete-range: Yes, the selected blocks ($counted$)
 cancel: Cancel (Esc)
 count-blocks: $count$ blocks
 count-blocks-one: 1 block

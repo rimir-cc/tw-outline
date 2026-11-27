@@ -108,6 +108,14 @@ A heading and a list item are one source line. Several lines would have to be sq
 
 Install rimir/graphviz or rimir/mermaid. Each registers a block type: //Insert after → Graphviz graph// writes a `$$$text/vnd.graphviz` block, and on a bullet //Add to this item → Graphviz graph// creates a graph tiddler and transcludes it in the item. A double-click on the graph edits its source in place.
 
+!! How do I move several blocks at once?
+
+Select the first, then Shift-Down (or Shift-Click the last): the range is framed, Alt-Up/Down, Tab, Delete, Ctrl-C/X and Externalize take all of it.
+
+!! Why is Externalize missing for some sub-items?
+
+Sub-items move into a list that is transcluded at the end of their parent's line, so it renders before the parent's other sub-items. A range that does not start at the parent's first sub-item would change the order; select from the first one (or move them up first).
+
 !! How does another plugin add a block type?
 
 With one tiddler tagged `$:/tags/rimir/outline/BlockType` (see the reference: block types). For a content type with its own parser, `behaviour: typed` and `content-type` are enough; `contexts: block item` and `inline: transclude` add it to bullets as a transcluded tiddler.

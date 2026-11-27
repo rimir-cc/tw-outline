@@ -52,7 +52,9 @@ methods.selectedClip = function() {
 	if(!adapter || !adapter.copy || !this.ensureCurrent()) {
 		return null;
 	}
-	return adapter.copy(this.model.text, this.model, this.selectedId);
+	var ids = this.rangeIds();
+	return ids.length > 1 && adapter.rangeClip ? adapter.rangeClip(this.model.text, this.model, ids) :
+		adapter.copy(this.model.text, this.model, this.selectedId);
 };
 
 // `source` rendered as HTML in this outline's context, links to tiddlers replaced by their text, no classes

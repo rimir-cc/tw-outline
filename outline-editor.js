@@ -53,6 +53,9 @@ var BUFFER_PREFIX = "$:/temp/rimir/outline/edit/",
 	HOST_CLASS = "rr-ol-editor-host",
 	// The editor of another tiddler (a diagram) or of a template's content (startTargetEdit)
 	TARGET_CLASS = "rr-ol-target-editor",
+	// Templates of the titles of new tiddlers (newTiddlerTitle); the config tiddlers carry the same defaults
+	NAME_PREFIX = "$:/config/rimir/outline/name/",
+	NAME_DEFAULTS = {diagram: "$host$/graphs/$type$", externalize: "$host$/parts/part"},
 	// Edited unit hidden (blocks) / only its own content hidden (items: sub-items stay visible)
 	EDITING_CLASS = "rr-ol-editing",
 	EDITING_OWN_CLASS = "rr-ol-editing-own",
@@ -1246,7 +1249,7 @@ The editor of another tiddler or of a template's content, below unit `id` (the u
 touched until the save). opts:
   {title}             - a diagram tiddler that unit `id` transcludes: its text is edited, the save writes it
   {isNew, typeName}   - "Add to this item" with a type of the item context: a transclude type starts with its starter
-                        text; the first save creates the tiddler (newDiagramTitle, the type's content type) and appends
+                        text; the first save creates the tiddler (newTiddlerTitle, the type's content type) and appends
                         {{title}} to the item's line. A template type (inline: a template with $content$) edits the
                         content; the save appends the filled template. Escape before the save writes nothing.
 The buffer is the editor buffer of this tiddler, marked outline-target-mode (a re-render does not keep it).
@@ -1322,15 +1325,16 @@ methods.saveTargetEdit = function() {
 	var host = this.wiki.getTiddler(this.tiddlerTitle),
 		current = host ? (host.fields.text || "") : "",
 		located = host ? this.locateEditUnit(current) : null,
-		type = blockTypes.getBlockType(this.wiki, target.typeName);
+		type = blockTypes.getBlockType(this.wiki, target.typeName),
+		adapter = this.getAdapter();
 	if(!located || !type) {
 		this.showNotice("conflict");
 		return false;
 	}
 	var u = located.model.units[located.id],
-		title = target.template ? "" : this.newDiagramTitle(located.id, type.badge, located.model),
+		title = target.template ? "" : this.newTiddlerTitle("diagram", {type: type.name}),
 		snippet = target.template ? target.template.replace(/\$content\$/g, text.replace(/\s*\r?\n\s*/g, " ").trim()) :
-			"{{" + title + "}}";
+			adapter.referenceTo(title, true);
 	this.closeEditor(true);
 	dom.focus(this.domNode);
 	if(title) {
@@ -1343,23 +1347,17 @@ methods.saveTargetEdit = function() {
 };
 
 /*
-Base name of a new diagram transcluded in unit `id`: its plain text (transclusions, macro calls, HTML tags and
-formatting marks removed, links by their text), cut at a word boundary to about 40 characters, and the badge in
-parentheses; the host title when the unit has no text. Made unique (" 1", " 2", ...) when the name is taken.
+Title of a new tiddler made by outline: the template $:/config/rimir/outline/name/<kind> ("diagram": "Add to this item",
+"externalize") with $host$ (this tiddler's title) and $type$ (vars.type) filled in, and the first free number from 1.
 */
-methods.newDiagramTitle = function(id, badge, model) {
-	model = model || this.model;
-	var source = this.getAdapter().editSource(model.text, model, id),
-		plain = source.replace(/\{\{[^}]*\}\}/g, " ").replace(/<<[\s\S]*?>>/g, " ")
-			.replace(/\[\[([^\]|]*)\|[^\]]*\]\]/g, "$1").replace(/\[\[([^\]]*)\]\]/g, "$1")
-			.replace(/<[^>]+>/g, " ").replace(/''|\/\/|__|~~|\^\^|,,|`|@@/g, "")
-			// Characters that are syntax inside {{...}}: no brackets or parameter bars, no field (!!) or index (##) part
-			.replace(/[{}|\[\]]/g, " ").replace(/!!+/g, "!").replace(/##+/g, "#").replace(/\s+/g, " ").trim();
-	if(plain.length > 40) {
-		var cut = plain.substring(0, 41).replace(/\s+\S*$/, "");
-		plain = cut || plain.substring(0, 40);
+methods.newTiddlerTitle = function(kind, vars) {
+	var base = this.wiki.getTiddlerText(NAME_PREFIX + kind, NAME_DEFAULTS[kind] || "$host$/") 
+			.replace(/\$host\$/g, this.tiddlerTitle).replace(/\$type\$/g, (vars && vars.type) || "").trim(),
+		n = 1;
+	while(this.wiki.tiddlerExists(base + n)) {
+		n++;
 	}
-	return this.wiki.generateNewTitle((plain || this.tiddlerTitle) + " (" + badge + ")");
+	return base + n;
 };
 
 // True when a new unit of block type `name` takes Enter as a line break (fenced and typed blocks)
