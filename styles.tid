@@ -14,6 +14,11 @@ tags: $:/tags/Stylesheet
 	outline-offset: 2px;
 }
 
+/* A selected transclusion ({{...}}, <$transclude>): its content belongs to another tiddler */
+.rr-ol-selected[data-ol-kind="transclusion"] {
+	outline-color: #e8800c;
+}
+
 /* A selected list item with sub-items: the frame is drawn by .rr-ol-selbox around the item's own lines only */
 .rr-ol-selected.rr-ol-selected-own {
 	outline: none;

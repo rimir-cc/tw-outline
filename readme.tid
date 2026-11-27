@@ -20,7 +20,7 @@ Work on an ordinary tiddler like on a Streams outline: select a block, edit it i
 * ''Split and merge'' — Enter in the middle of a list item splits it at the caret, at the start of a filled item or paragraph it opens an empty one above; Backspace at the start of an item joins it to the item above (an empty item is deleted), Delete at its end pulls the item below up, like in Streams.
 * ''Block menu'' — Alt-Enter (also in the editor, to turn the edited unit into another type): insert a new paragraph, heading, list, quote or code block after or before the selection (in an empty tiddler: the first block), or turn the selection into another type (a bullet list into a numbered one, a paragraph into a heading, a heading into another level, ...).
 * ''Key overview'' — press `?` in an outline (or its small ? button) for a table of all keys; the //keys// tab shows the same. Every key is configurable in the settings tab with TW's shortcut editor.
-* ''Transclusions'' — a small marker on `{{…}}` lines; Enter opens the target in outline mode.
+* ''Transclusions'' — a small marker on `{{…}}` lines and an orange selection frame; Enter opens the target in outline mode.
 * ''Safe writes'' — every write is a splice of a known range; if the text changed underneath, the edit is relocated or refused, never guessed.
 
 !! Prerequisites
