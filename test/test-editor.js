@@ -19,7 +19,7 @@ describe("outline editor", function() {
 
 	// Shortcut config and the editor template (shadows of the plugin) copied into each test wiki
 	function pluginTiddlers() {
-		return $tw.wiki.filterTiddlers("[all[shadows+tiddlers]prefix[$:/config/shortcuts/outline-]] [[" + EDITOR + "]] [[$:/plugins/rimir/outline/ui/overlay]] [[$:/plugins/rimir/outline/ui/overlay-diagram]] [[$:/plugins/rimir/outline/ui/overlay-bar]] " +
+		return $tw.wiki.filterTiddlers("[all[shadows+tiddlers]prefix[$:/config/shortcuts/outline-]] [[" + EDITOR + "]] [[$:/plugins/rimir/outline/ui/overlay]] [[$:/plugins/rimir/outline/ui/overlay-diagram]] [[$:/plugins/rimir/outline/ui/overlay-bar]] [[$:/plugins/rimir/outline/ui/diagram-tools]] " +
 			"[all[shadows+tiddlers]tag[$:/tags/rimir/outline/BlockType]prefix[$:/plugins/rimir/outline/]] [[$:/tags/rimir/outline/BlockType]]").map(function(title) {
 			return $tw.wiki.getTiddler(title).fields;
 		});
@@ -650,6 +650,32 @@ describe("outline editor", function() {
 				expect(r.wiki.getTiddlerText(BUF + "T")).toBe("s");
 				r.widget.saveEdit();
 				expect(r.wiki.getTiddlerText("T")).toBe("para\n\n$$$text/plain\ns\n$$$");
+			});
+
+			it("the code field of a new diagram and of a typed block has the type's examples and docs link", function() {
+				var EX = {title: "E1", tags: "$:/tags/rimir/outline/Snippet", "for": "diag", caption: "First example", text: "ex1"},
+					DOCS = $tw.utils.extend({}, TYPE, {docs: "https://example.org/docs"});
+				function selects(w) {
+					var out = [];
+					(function walk(x) {
+						if(x.parseTreeNode && x.parseTreeNode.type === "select") { out.push(x); }
+						$tw.utils.each(x.children, walk);
+					})(w);
+					return out;
+				}
+				var r = render("* a\n* b", [DOCS, EX]);
+				menuOn(r, "* a");
+				choose(r, "add", "diag");
+				expect(selects(r.widget.editor.widget).length).toBe(1);
+				expect(r.widget.editor.host.textContent).toContain("Docs");
+				r.widget.cancelEdit();
+				var t = render("p\n\n$$$text/plain\nsrc\n$$$", [DOCS, EX]);
+				t.widget.startEdit(t.idOf("$$$text/plain\nsrc\n$$$"));
+				expect(selects(t.widget.editor.widget).length).toBe(1);
+				t.widget.cancelEdit();
+				// A paragraph's editor has none
+				t.widget.startEdit(t.idOf("p"));
+				expect(selects(t.widget.editor.widget).length).toBe(0);
 			});
 
 			it("escape before the first save leaves no trace", function() {

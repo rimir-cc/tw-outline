@@ -365,7 +365,9 @@ methods.placeEditor = function(focus) {
 			"len": String(this.wiki.getTiddlerText(this.bufferTitle(), "").length),
 			"outline-edit-focus": focus ? "yes" : "no",
 			// A new block of a chosen type names its type in the empty field
-			"outline-edit-placeholder": this.newTypeCaption(ed.blockType)
+			"outline-edit-placeholder": this.newTypeCaption(ed.blockType),
+			// A diagram's code (a typed block, a new diagram): examples and docs link (ui/diagram-tools)
+			"outline-diagram-type": this.editedDiagramType()
 		}
 	});
 	ed.widget.render(host, null);
@@ -1364,6 +1366,23 @@ methods.newTiddlerTitle = function(kind, vars) {
 methods.newTypeIsMultiline = function(name) {
 	var type = name ? blockTypes.getBlockType(this.wiki, name) : null;
 	return !!type && (type.behaviour === "fenced" || type.behaviour === "typed");
+};
+
+// Name of the typed block type (a diagram) whose code the editor shows: a new diagram ("Add to this item"), a new typed
+// block, or an existing typed block; "" for anything else
+methods.editedDiagramType = function() {
+	var ed = this.editor,
+		types = blockTypes.getBlockTypes(this.wiki),
+		type = null;
+	if(ed.target) {
+		type = ed.target.template ? null : (ed.target.typeName ? blockTypes.getBlockType(this.wiki, ed.target.typeName) : null);
+	} else if(ed.isNew) {
+		type = ed.blockType ? blockTypes.getBlockType(this.wiki, ed.blockType) : null;
+	} else if(ed.id !== -1 && this.units[ed.id]) {
+		var adapter = this.getAdapter();
+		type = adapter && adapter.typedBlockType ? adapter.typedBlockType(this.model.text, this.units[ed.id].unit, types) : null;
+	}
+	return type && type.behaviour === "typed" ? type.name : "";
 };
 
 // Caption of block type `name` (the new unit's placeholder), "" when there is none

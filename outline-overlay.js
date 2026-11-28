@@ -69,7 +69,8 @@ methods.openOverlay = function(id, title) {
 		buffer = diagram ? DIAGRAM_BUFFER_PREFIX + this.tiddlerTitle : "",
 		unit = this.units[id].unit,
 		element = this.document.createElement("div"),
-		variables = {"rr-ol-overlay-target": title, "rr-ol-overlay-buffer": buffer},
+		typed = blockTypes.typeForContentType(this.wiki, target.fields.type),
+		variables = {"rr-ol-overlay-target": title, "rr-ol-overlay-buffer": buffer, "rr-ol-overlay-type": typed ? typed.name : ""},
 		self = this;
 	variables[HOST_VARIABLE] = "yes";
 	if(diagram) {

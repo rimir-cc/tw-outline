@@ -33,7 +33,7 @@ describe("outline block types", function() {
 
 	var GRAPHVIZ = {title: "T/graphviz", tags: TAG, name: "graphviz", caption: "Graphviz graph", badge: "graphviz",
 		behaviour: "typed", "content-type": "text/vnd.graphviz", starter: "digraph {}", contexts: "block item",
-		inline: "transclude", "list-after": "$:/plugins/rimir/outline/blocktypes/code"};
+		inline: "transclude", docs: "https://graphviz.org/documentation/", "list-after": "$:/plugins/rimir/outline/blocktypes/code"};
 
 	it("lists the built-ins in order with their badges", function() {
 		var types = blockTypes.getBlockTypes(pluginWiki());
@@ -62,6 +62,7 @@ describe("outline block types", function() {
 		expect(gv.contexts).toEqual(["block", "item"]);
 		expect(gv.inline).toBe("transclude");
 		expect(gv.starter).toBe("digraph {}");
+		expect(gv.docs).toBe("https://graphviz.org/documentation/");
 		expect(gv.make("x", "\n")).toBe("$$$text/vnd.graphviz\nx\n$$$");
 		expect(blockTypes.typeForContentType(wiki, "text/vnd.graphviz")).toBe(gv);
 		expect(blockTypes.typeForContentType(wiki, "text/plain")).toBeNull();

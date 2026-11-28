@@ -25,10 +25,11 @@ tags: $:/tags/Stylesheet
 	outline-color: var(--rr-ol-other-tiddler);
 }
 
-/* Transclusion overlay (outline-overlay.js): the transcluded tiddler's own outline over the unit */
+/* Transclusion overlay (outline-overlay.js): the transcluded tiddler's own outline over the unit. It starts a little
+   right of the outline it opens from, so nested overlays step to the right */
 .rr-ol-overlay {
 	position: absolute;
-	left: -0.5em;
+	left: 1.5em;
 	right: -0.5em;
 	z-index: 20;
 	padding: 0 0.5em 0.4em 0.5em;
@@ -59,6 +60,23 @@ tags: $:/tags/Stylesheet
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	color: var(--rr-ol-other-tiddler);
+}
+
+/* Examples picker and docs link of a diagram's code field (ui/diagram-tools) */
+.rr-ol-diagram-tools {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.6em;
+	font-size: 0.85em;
+}
+
+.rr-ol-editor-host > .rr-ol-diagram-tools {
+	display: flex;
+	margin-bottom: 0.2em;
+}
+
+.rr-ol-diagram-examples {
+	font-size: inherit;
 }
 
 .rr-ol-overlay-hint {

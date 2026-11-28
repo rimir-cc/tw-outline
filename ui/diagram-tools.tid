@@ -1,0 +1,19 @@
+title: $:/plugins/rimir/outline/ui/diagram-tools
+description: Examples picker and docs link of a typed block type (a diagram), shown with its code field. Variables: rr-ol-diagram-buffer (the tiddler the code is edited in), rr-ol-diagram-type (the block type's name). Examples are tiddlers tagged $:/tags/rimir/outline/Snippet with for: <type name>; picking one replaces the code (the buffer; nothing is saved). The link is the type's docs field.
+
+\procedure rr-ol-pick-example()
+<$action-setfield $tiddler=<<rr-ol-diagram-buffer>> text={{{ [<rr-ol-example-state>get[text]get[text]] }}}/>
+<$action-deletetiddler $tiddler=<<rr-ol-example-state>>/>
+\end
+\whitespace trim
+<$let rr-ol-example-state={{{ [[$:/temp/rimir/outline/example/]addsuffix<rr-ol-diagram-buffer>] }}}>
+<span class="rr-ol-diagram-tools">
+<$list filter="[all[shadows+tiddlers]tag[$:/tags/rimir/outline/Snippet]!is[draft]field:for<rr-ol-diagram-type>limit[1]]" variable="_">
+<$select tiddler=<<rr-ol-example-state>> default="" class="rr-ol-diagram-examples" tooltip="Replace the code with an example (nothing is saved until Ctrl-Enter)" actions=<<rr-ol-pick-example>>>
+<option value="">Examples</option>
+<$list filter="[all[shadows+tiddlers]tag[$:/tags/rimir/outline/Snippet]!is[draft]field:for<rr-ol-diagram-type>]"><option value=<<currentTiddler>>><$text text={{{ [<currentTiddler>get[caption]else<currentTiddler>] }}}/></option></$list>
+</$select>
+</$list>
+<$list filter="[all[shadows+tiddlers]tag[$:/tags/rimir/outline/BlockType]!is[draft]field:name<rr-ol-diagram-type>get[docs]]" variable="docs"><a class="rr-ol-diagram-docs" href=<<docs>> target="_blank" rel="noopener noreferrer">Docs ↗</a></$list>
+</span>
+</$let>

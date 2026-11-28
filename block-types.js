@@ -10,8 +10,10 @@ getBlockTypes(wiki)                  -> [type] (cached until the next tiddler ch
 getBlockType(wiki, name)             -> type or null
 typeForContentType(wiki, contentType) -> the typed type for a content type, or null
 
-type: {title, name, caption, badge, behaviour, level, marker, open, close, contentType, starter, contexts, inline,
+type: {title, name, caption, badge, behaviour, level, marker, open, close, contentType, starter, docs, contexts, inline,
        turnInto, singleLine, kind, make(content, nl)}
+  docs       - a link to the format's documentation (shown with a diagram's code field, ui/diagram-tools)
+Examples for a type are tiddlers tagged $:/tags/rimir/outline/Snippet with for: <type name> (ui/diagram-tools).
   behaviour  - paragraph | heading (level 1-6) | item (marker) | fenced (open, close lines) | typed (content-type:
                a $$$<content-type> ... $$$ block)
   kind       - the unit kind it produces: block, heading or item
@@ -50,6 +52,7 @@ function makeType(tiddler) {
 			close: field(tiddler, "close"),
 			contentType: field(tiddler, "content-type").trim(),
 			starter: field(tiddler, "starter"),
+			docs: field(tiddler, "docs").trim(),
 			contexts: $tw.utils.parseStringArray(field(tiddler, "contexts") || "block"),
 			inline: field(tiddler, "inline"),
 			turnInto: field(tiddler, "turn-into"),

@@ -16,7 +16,7 @@ describe("outline overlay", function() {
 
 	function pluginTiddlers() {
 		return $tw.wiki.filterTiddlers("[all[shadows+tiddlers]prefix[$:/config/shortcuts/outline-]] " +
-			"[[$:/plugins/rimir/outline/ui/editor]] [[$:/plugins/rimir/outline/ui/overlay]] [[$:/plugins/rimir/outline/ui/overlay-diagram]] " +
+			"[[$:/plugins/rimir/outline/ui/editor]] [[$:/plugins/rimir/outline/ui/overlay]] [[$:/plugins/rimir/outline/ui/overlay-diagram]] [[$:/plugins/rimir/outline/ui/overlay-bar]] [[$:/plugins/rimir/outline/ui/diagram-tools]] " +
 			"[all[shadows+tiddlers]tag[$:/tags/rimir/outline/BlockType]prefix[$:/plugins/rimir/outline/]] [[$:/tags/rimir/outline/BlockType]]").map(function(title) {
 			return $tw.wiki.getTiddler(title).fields;
 		});
@@ -231,12 +231,17 @@ describe("outline overlay", function() {
 
 	describe("diagrams", function() {
 		var TYPE = {title: "TT", tags: "$:/tags/rimir/outline/BlockType", name: "diag", caption: "Diagram", badge: "x",
-				behaviour: "typed", "content-type": "text/plain", contexts: "block item", inline: "transclude"},
+				behaviour: "typed", "content-type": "text/plain", contexts: "block item", inline: "transclude", docs: "https://example.org/docs"},
+			EXAMPLES = [
+				{title: "E1", tags: "$:/tags/rimir/outline/Snippet", "for": "diag", caption: "First example", text: "ex1"},
+				{title: "E2", tags: "$:/tags/rimir/outline/Snippet", "for": "diag", caption: "Second example", text: "ex2"},
+				{title: "E3", tags: "$:/tags/rimir/outline/Snippet", "for": "other", caption: "Not for diag", text: "ex3"}
+			],
 			G = {title: "G", type: "text/plain", text: "g1"},
 			BUF = "$:/temp/rimir/outline/diagram/T";
 
 		function opened(source) {
-			var r = render(source, [TYPE, G]);
+			var r = render(source, [TYPE, G].concat(EXAMPLES));
 			r.widget.select(r.idOf(r.widget, source.split("\n")[0]));
 			key(r.widget, KEYS.enter, {shift: true});
 			return r;
@@ -255,6 +260,33 @@ describe("outline overlay", function() {
 			r.refresh([BUF]);
 			expect(o.element.textContent).toContain("g2");
 			expect(r.wiki.getTiddlerText("G")).toBe("g1");
+		});
+
+		it("examples of the type replace the source; the docs link of the type", function() {
+			var r = opened("{{G}}\n\np"),
+				o = r.widget.overlay,
+				select = findWidgets(o.widget, "select")[0],
+				options = findWidgets(select, "element").filter(function(w) { return w.parseTreeNode.tag === "option"; });
+			expect(options.map(function(w) { return w.domNodes[0].textContent; })).toEqual(["Examples", "First example", "Second example"]);
+			var link = findWidgets(o.widget, "element").filter(function(w) { return w.parseTreeNode.tag === "a"; })[0];
+			expect(link.domNodes[0].getAttribute("href")).toBe("https://example.org/docs");
+			expect(link.domNodes[0].getAttribute("target")).toBe("_blank");
+			// Picking an example: the buffer (and so the preview) gets its source; the diagram is not written
+			select.getSelectDomNode = function() { return {value: "E2"}; };
+			select.handleChangeEvent({});
+			expect(r.wiki.getTiddlerText(BUF)).toBe("ex2");
+			expect(r.wiki.getTiddlerText("G")).toBe("g1");
+			// The picker is back on "Examples"
+			expect(r.wiki.tiddlerExists("$:/temp/rimir/outline/example/" + BUF)).toBe(false);
+		});
+
+		it("no examples, no docs: no picker, no link", function() {
+			var r = render("{{G}}\n\np", [{title: "TT", tags: "$:/tags/rimir/outline/BlockType", name: "diag", caption: "Diagram",
+				badge: "x", behaviour: "typed", "content-type": "text/plain"}, G]);
+			r.widget.select(r.idOf(r.widget, "{{G}}"));
+			key(r.widget, KEYS.enter, {shift: true});
+			expect(findWidgets(r.widget.overlay.widget, "select").length).toBe(0);
+			expect(r.widget.overlay.element.textContent).not.toContain("Docs");
 		});
 
 		it("save writes the diagram and closes; escape closes without writing", function() {
